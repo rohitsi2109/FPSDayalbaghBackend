@@ -5,10 +5,14 @@ from django.contrib.auth import authenticate
 from .models import User
 from users.serializers import RegisterSerializer, LoginSerializer
 from rest_framework.authtoken.models import Token
-
+from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import RegisterSerializer
+
+
+def home_view(request):
+    return render(request, 'index.html')
 
 
 class RegisterView(APIView):

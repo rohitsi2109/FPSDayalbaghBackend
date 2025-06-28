@@ -1,0 +1,15 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to FPS API</title>
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <h1>Fair Price Shop Backend</h1>
+        <p>This API handles user registration, login, product catalog, and order management.</p>
+        <p>Use endpoints like <code>/api/users/register/</code> and <code>/api/users/login/</code> for access.</p>
+    </div>
+</body>
+</html>
