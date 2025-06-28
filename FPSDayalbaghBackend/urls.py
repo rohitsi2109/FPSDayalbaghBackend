@@ -5,8 +5,8 @@ from django.conf.urls.static import static
 from users.views import home_view
 
 urlpatterns = [
-    path('', home_view),
     path('admin/', admin.site.urls),
+    path('', home_view),
     path('api/users/', include('users.urls')),
 ]
 # handler500 = server_error

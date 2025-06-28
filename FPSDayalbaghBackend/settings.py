@@ -189,7 +189,7 @@ ROOT_URLCONF = 'FPSDayalbaghBackend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, "templates")],
+        'DIRS': [os.path.join(BASE_DIR, "templates")],  # <== correct
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -201,6 +201,7 @@ TEMPLATES = [
         },
     },
 ]
+
 
 WSGI_APPLICATION = 'FPSDayalbaghBackend.wsgi.application'
 
