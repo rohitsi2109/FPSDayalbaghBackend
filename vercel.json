@@ -4,13 +4,13 @@
     {
       "src": "FPSDayalbaghBackend/wsgi.py",
       "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb", "runtime": "python3.12.0" }
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.12" }
     },
     {
-      "src": "build_files.sh",
+      "src": "build.sh",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "staticfiles_build/static"
+        "distDir": "staticfiles_build"
       }
     }
   ],
