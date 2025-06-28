@@ -138,6 +138,7 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
+
 load_dotenv()  # Only needed if you use a .env locally
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -145,7 +146,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-q61skis&zdo@6jezn&r66)naz7^pjn3gay8e9t4j8w()1h-u64'
-
+DATABASE_URL= 'postgresql://postgres:LNoUVEQbRhTzBAhXdiSYjFkjpJFBqgBI@turntable.proxy.rlwy.net:30221/railway'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = "True"
 
@@ -205,10 +206,7 @@ WSGI_APPLICATION = 'FPSDayalbaghBackend.wsgi.application'
 
 # Database
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600
-    )
+    'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
 }
 
 # Password validation
@@ -227,9 +225,10 @@ USE_L10N = True
 USE_TZ = True
 
 # Static files
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = 'static/'
+STATICFILES_DIRS = os.path.join(BASE_DIR, 'static'),
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_build', 'static')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Default primary key field type
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
