@@ -144,12 +144,12 @@ load_dotenv()  # Only needed if you use a .env locally
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY", 'django-insecure-q61skis&zdo@6jezn&r66)naz7^pjn3gay8e9t4j8w()1h-u64')
+SECRET_KEY = 'django-insecure-q61skis&zdo@6jezn&r66)naz7^pjn3gay8e9t4j8w()1h-u64'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", "False") == "True"
+DEBUG = "True"
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = ['.vercel.app','localhost', '127.0.0.1']
 
 # Application definition
 INSTALLED_APPS = [
