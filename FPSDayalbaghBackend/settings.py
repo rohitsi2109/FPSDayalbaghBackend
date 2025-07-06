@@ -132,30 +132,160 @@
 # DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+#
+# import os
+# from pathlib import Path
+# import dj_database_url
+# from dotenv import load_dotenv
+#
+#
+# load_dotenv()  # Only needed if you use a .env locally
+#
+# # Build paths inside the project like this: BASE_DIR / 'subdir'.
+# BASE_DIR = Path(__file__).resolve().parent.parent
+#
+# # SECURITY WARNING: keep the secret key used in production secret!
+# SECRET_KEY = 'django-insecure-q61skis&zdo@6jezn&r66)naz7^pjn3gay8e9t4j8w()1h-u64'
+# DATABASE_URL= 'postgresql://postgres:LNoUVEQbRhTzBAhXdiSYjFkjpJFBqgBI@turntable.proxy.rlwy.net:30221/railway'
+# # SECURITY WARNING: don't run with debug turned on in production!
+# DEBUG = "True"
+#
+# ALLOWED_HOSTS = ['.vercel.app','localhost', '127.0.0.1']
+#
+# CORS_ALLOW_ALL_ORIGINS = True
+#
+# # Application definition
+# INSTALLED_APPS = [
+#     'django.contrib.admin',
+#     'django.contrib.auth',
+#     'django.contrib.contenttypes',
+#     'django.contrib.sessions',
+#     'django.contrib.messages',
+#     'django.contrib.staticfiles',
+#
+#     # Third-party
+#     'rest_framework',
+#     'rest_framework.authtoken',
+#
+#     # Custom
+#     'users',
+#     'products',
+#     'orders',
+# ]
+#
+# MIDDLEWARE = [
+#     'django.middleware.security.SecurityMiddleware',
+#     'whitenoise.middleware.WhiteNoiseMiddleware',
+#     'django.contrib.sessions.middleware.SessionMiddleware',
+#     'django.middleware.common.CommonMiddleware',
+#     'django.middleware.csrf.CsrfViewMiddleware',
+#     'django.contrib.auth.middleware.AuthenticationMiddleware',
+#     'django.contrib.messages.middleware.MessageMiddleware',
+#     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+# ]
+#
+# AUTH_USER_MODEL = 'users.User'
+#
+# ROOT_URLCONF = 'FPSDayalbaghBackend.urls'
+#
+# TEMPLATES = [
+#     {
+#         'BACKEND': 'django.template.backends.django.DjangoTemplates',
+#         'DIRS': [os.path.join(BASE_DIR, "templates")],  # <== correct
+#         'APP_DIRS': True,
+#         'OPTIONS': {
+#             'context_processors': [
+#                 'django.template.context_processors.debug',
+#                 'django.template.context_processors.request',
+#                 'django.contrib.auth.context_processors.auth',
+#                 'django.contrib.messages.context_processors.messages',
+#             ],
+#         },
+#     },
+# ]
+#
+#
+# WSGI_APPLICATION = 'FPSDayalbaghBackend.wsgi.application'
+#
+# # Database
+# DATABASES = {
+#     'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
+# }
+#
+# # Password validation
+# AUTH_PASSWORD_VALIDATORS = [
+#     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+#     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+#     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+#     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+# ]
+#
+# # Internationalization
+# LANGUAGE_CODE = 'en-us'
+# TIME_ZONE = 'UTC'
+# USE_I18N = True
+# USE_L10N = True
+# USE_TZ = True
+#
+# # Static files
+# STATIC_URL = '/static/'
+# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_build', 'static')
+# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+#
+#
+#
+# DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+
+
+
+
+
+
+
+
 
 import os
 from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
+load_dotenv()  # Loads .env in local dev
 
-load_dotenv()  # Only needed if you use a .env locally
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-q61skis&zdo@6jezn&r66)naz7^pjn3gay8e9t4j8w()1h-u64'
-DATABASE_URL= 'postgresql://postgres:LNoUVEQbRhTzBAhXdiSYjFkjpJFBqgBI@turntable.proxy.rlwy.net:30221/railway'
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = "True"
 
-ALLOWED_HOSTS = ['.vercel.app','localhost', '127.0.0.1']
+DEBUG = True
 
-CORS_ALLOW_ALL_ORIGINS = True
+ALLOWED_HOSTS = [
+    '.vercel.app',
+    'localhost',
+    '127.0.0.1'
+]
+
+# ✅ CSRF & CORS Configuration
+CSRF_TRUSTED_ORIGINS = [
+    'https://fps-dayalbagh-backend.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'capacitor://localhost',  # For mobile if needed
+]
+
+CORS_ALLOWED_ORIGINS = [
+    'https://fps-dayalbagh-backend.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'capacitor://localhost',
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 INSTALLED_APPS = [
+    # Django
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -166,14 +296,16 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework.authtoken',
+    'corsheaders',  # ✅ required for CORS
 
-    # Custom
+    # Your apps
     'users',
     'products',
     'orders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # ✅ Must be first
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -184,14 +316,12 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-AUTH_USER_MODEL = 'users.User'
-
 ROOT_URLCONF = 'FPSDayalbaghBackend.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, "templates")],  # <== correct
+        'DIRS': [os.path.join(BASE_DIR, "templates")],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -204,15 +334,14 @@ TEMPLATES = [
     },
 ]
 
-
 WSGI_APPLICATION = 'FPSDayalbaghBackend.wsgi.application'
 
-# Database
+# ✅ Railway DB config
+DATABASE_URL = 'postgresql://postgres:LNoUVEQbRhTzBAhXdiSYjFkjpJFBqgBI@turntable.proxy.rlwy.net:30221/railway'
 DATABASES = {
     'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
 }
 
-# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -220,19 +349,18 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-# Static files
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_build', 'static')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom user model
+AUTH_USER_MODEL = 'users.User'
