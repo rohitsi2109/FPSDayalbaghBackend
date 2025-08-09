@@ -9,7 +9,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home_view),
     path('api/users/', include('users.urls')),
-    path('api/', include('products.urls')),          # <-- add products
+    path('api/', include('products.urls')),
+    path("api/", include("orders.urls")),
     path('api/csrf/', CSRFTokenView.as_view(), name='csrf'),
 ]
 

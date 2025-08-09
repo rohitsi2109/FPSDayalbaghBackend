@@ -269,14 +269,14 @@ ALLOWED_HOSTS = [
 # ✅ CSRF & CORS Configuration
 CSRF_TRUSTED_ORIGINS = [
     'https://fps-dayalbagh-backend.vercel.app',
-    'http://localhost:3000',
+    'http://localhost:63730',
     'http://127.0.0.1:3000',
-    'capacitor://localhost',  # For mobile if needed
+    'capacitor://localhost',
 ]
 
 CORS_ALLOWED_ORIGINS = [
     'https://fps-dayalbagh-backend.vercel.app',
-    'http://localhost:3000',
+    'http://localhost:63730',
     'http://127.0.0.1:3000',
     'capacitor://localhost',
 ]
@@ -315,6 +315,17 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
+        # 'rest_framework.authentication.SessionAuthentication',  # optional
+    ),
+    'COERCE_DECIMAL_TO_STRING': False,  # send Decimal fields as numbers, not strings
+}
+
+
 
 ROOT_URLCONF = 'FPSDayalbaghBackend.urls'
 
