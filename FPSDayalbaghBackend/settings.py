@@ -337,7 +337,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'FPSDayalbaghBackend.wsgi.application'
 
 # ✅ Railway DB config
-DATABASE_URL = 'postgresql://postgres:LNoUVEQbRhTzBAhXdiSYjFkjpJFBqgBI@turntable.proxy.rlwy.net:30221/railway'
+DATABASE_URL = 'postgresql://postgres.autsahhilzzsiaowhisk:Tome@nothing0@aws-0-ap-south-1.pooler.supabase.com:6543/postgres'
 DATABASES = {
     'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
 }
@@ -356,8 +356,11 @@ USE_L10N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_build', 'static')
+STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

@@ -1,3 +1,4 @@
+# project urls.py
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -8,8 +9,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home_view),
     path('api/users/', include('users.urls')),
-    path('api/csrf/', CSRFTokenView.as_view(), name='csrf')
+    path('api/', include('products.urls')),          # <-- add products
+    path('api/csrf/', CSRFTokenView.as_view(), name='csrf'),
 ]
-# handler500 = server_error
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-urlpatterns += static(settings.STATIC_ROOT, documents_root= settings.STATIC_ROOT)
+
+# Serve media/static only in dev
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
