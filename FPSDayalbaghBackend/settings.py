@@ -269,14 +269,14 @@ ALLOWED_HOSTS = [
 # ✅ CSRF & CORS Configuration
 CSRF_TRUSTED_ORIGINS = [
     'https://fps-dayalbagh-backend.vercel.app',
-    'http://localhost:63730',
+    'http://localhost:64339',
     'http://127.0.0.1:3000',
     'capacitor://localhost',
 ]
 
 CORS_ALLOWED_ORIGINS = [
     'https://fps-dayalbagh-backend.vercel.app',
-    'http://localhost:63730',
+    'http://localhost:64339',
     'http://127.0.0.1:3000',
     'capacitor://localhost',
 ]
