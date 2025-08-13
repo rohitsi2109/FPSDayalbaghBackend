@@ -297,11 +297,10 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',  # ✅ required for CORS
-
-    # Your apps
+    'orders.apps.OrdersConfig',
+    'notifications.apps.NotificationsConfig',
     'users',
     'products',
-    'orders',
 ]
 
 MIDDLEWARE = [
