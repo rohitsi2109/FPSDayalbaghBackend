@@ -65,7 +65,6 @@ class UserOrderViewSet(viewsets.ModelViewSet):
         return Response(OrderSerializer(order, context={"request": request}).data)
 
 
-# ---------- ADMIN API: /api/admin/orders/ ----------
 class AdminOrderViewSet(viewsets.ModelViewSet):
     """
     Admin endpoints:

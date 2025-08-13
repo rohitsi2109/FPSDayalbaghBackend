@@ -17,3 +17,6 @@ class ProductListView(ListAPIView):
         if category:
             qs = qs.filter(category__name__iexact=category)
         return qs
+
+
+

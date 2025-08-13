@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Upload result{% if dry_run %} (dry run){% endif %}</h1>
+
+<ul>
+  <li>Created categories: <b>{{ created_categories }}</b></li>
+  <li>Created products: <b>{{ created_products }}</b></li>
+  <li>Updated products: <b>{{ updated_products }}</b></li>
+</ul>
+
+{% if errors %}
+  <h3>Row errors ({{ errors|length }})</h3>
+  <table class="adminlist">
+    <thead><tr><th>#</th><th>Name</th><th>Error</th></tr></thead>
+    <tbody>
+    {% for e in errors %}
+      <tr><td>{{ e.row }}</td><td>{{ e.name }}</td><td>{{ e.error }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>No row errors.</p>
+{% endif %}
+
+<p style="margin-top:12px">
+  <a class="button" href="{% url 'admin:products_product_upload_csv' %}">Upload another</a>
+  <a class="button" href="{% url 'admin:products_product_changelist' %}">Back to products</a>
+</p>
+{% endblock %}
+
