@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from .models import Device
-from .serializer import DeviceSerializer  # or .serializers if renamed
+from notifications.serializers import DeviceSerializer
 from .fcm import send_to_tokens
 
 class DeviceRegisterView(APIView):
