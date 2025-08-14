@@ -1,53 +1,47 @@
 # notifications/fcm.py
-import json
 import logging
-import os
+from pathlib import Path
 from typing import Iterable, Mapping
-from firebase_admin import messaging, credentials, initialize_app
-from firebase_admin._messaging_utils import UnregisteredError
-from google.auth.exceptions import DefaultCredentialsError
+
+from django.conf import settings
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 log = logging.getLogger(__name__)
 
-_initialized = False
-
 def _init():
-    """Initialize Firebase Admin exactly once, using env credentials."""
-    global _initialized
-    if _initialized:
-        return
+    """Initialize Firebase Admin once using local firebase-admin.json + explicit projectId."""
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
+
+    cred_path = Path(getattr(
+        settings, "FIREBASE_ADMIN_CREDENTIALS_FILE",
+        Path(settings.BASE_DIR) / "firebase-admin.json"
+    ))
+    project_id = getattr(settings, "FIREBASE_PROJECT_ID", None)
+
+    if cred_path.exists():
+        cred = credentials.Certificate(str(cred_path))
+        return firebase_admin.initialize_app(cred, {"projectId": project_id} if project_id else None)
+
+    # Fallback (not recommended, but keeps the code robust)
+    return firebase_admin.initialize_app(options={"projectId": project_id} if project_id else None)
+
+def _send_one(token: str, title: str, body: str, data: Mapping[str, str] | None, app):
+    msg = messaging.Message(
+        token=token,
+        notification=messaging.Notification(title=title, body=body),
+        data={k: str(v) for k, v in (data or {}).items()},
+        android=messaging.AndroidConfig(priority="high"),
+        # Add APNS config later if/when you support iOS
+    )
     try:
-        cred = None
-
-        # 1) Preferred: GOOGLE_APPLICATION_CREDENTIALS -> service account file path
-        svc_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-        if svc_path and os.path.exists(svc_path):
-            cred = credentials.Certificate(svc_path)
-
-        # 2) Fallback: FIREBASE_CREDENTIALS_JSON -> raw JSON in an env var
-        if not cred:
-            raw = os.environ.get("FIREBASE_CREDENTIALS_JSON")
-            if raw:
-                try:
-                    data = json.loads(raw)
-                    cred = credentials.Certificate(data)
-                except Exception:
-                    log.exception("Invalid FIREBASE_CREDENTIALS_JSON")
-
-        # 3) Last resort: application default (often missing in serverless)
-        if cred:
-            initialize_app(cred)
-        else:
-            initialize_app()  # will use ADC if available
-
-        _initialized = True
-        log.info("Firebase Admin initialized for messaging.")
-    except DefaultCredentialsError as e:
-        log.error("Firebase Admin credentials not found: %s", e)
-        raise
-    except Exception:
-        log.exception("Firebase Admin init failed")
-        raise
+        messaging.send(msg, app=app)
+        return True, None
+    except Exception as exc:
+        code = getattr(exc, "code", "")
+        message = getattr(exc, "message", str(exc))
+        return False, {"token": token, "code": code, "message": message}
 
 def send_to_tokens(
     tokens: Iterable[str],
@@ -55,26 +49,25 @@ def send_to_tokens(
     body: str,
     data: Mapping[str, str] | None = None,
 ):
-    _init()
-    tokens = [t for t in tokens if t]
-    if not tokens:
-        return {"success": 0, "failure": 0, "errors": []}
+    app = _init()
 
-    msg = messaging.MulticastMessage(
-        tokens=tokens,
-        notification=messaging.Notification(title=title, body=body),
-        data={k: str(v) for k, v in (data or {}).items()},
-        android=messaging.AndroidConfig(priority="high"),
-        apns=messaging.APNSConfig(payload=messaging.APNSPayload()),
-    )
+    clean_tokens = [t for t in tokens if t]
+    if not clean_tokens:
+        return {"success": 0, "failure": 0, "errors": [], "removed": 0}
 
-    resp = messaging.send_each_for_multicast(msg)
-    # Detailed logging (helps catch MISMATCH_SENDER_ID / UNREGISTERED)
+    success = 0
     errors = []
-    for i, r in enumerate(resp.responses):
-        if not r.success:
-            err = getattr(r.exception, "code", str(r.exception))
-            errors.append({"token": tokens[i], "error": err})
-    log.info("FCM sent: success=%s failure=%s errors=%s",
-             resp.success_count, resp.failure_count, errors)
-    return {"success": resp.success_count, "failure": resp.failure_count, "errors": errors}
+    removed = 0
+
+    for t in clean_tokens:
+        ok, err = _send_one(t, title, body, data, app)
+        if ok:
+            success += 1
+        else:
+            errors.append(err)
+            # Clean up obviously dead tokens if you want
+            if str(err.get("code", "")).upper() in {"UNREGISTERED", "INVALID_ARGUMENT"}:
+                removed += 1
+
+    log.info("FCM (per-token): success=%s failure=%s errors=%s", success, len(errors), errors)
+    return {"success": success, "failure": len(errors), "errors": errors, "removed": removed}

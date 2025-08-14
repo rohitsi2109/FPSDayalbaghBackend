@@ -377,3 +377,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom user model
 AUTH_USER_MODEL = 'users.User'
+
+FIREBASE_PROJECT_ID = "fair-price-shop-6e85e"
+FIREBASE_ADMIN_CREDENTIALS_FILE = BASE_DIR / "firebase-admin.json"
