@@ -1,7 +1,7 @@
 from django.urls import path
-from .views import RegisterDeviceView, UnregisterDeviceView
+from .views import DeviceRegisterView, DeviceDeleteView
 
 urlpatterns = [
-    path('register/', RegisterDeviceView.as_view()),
-    path('unregister/', UnregisterDeviceView.as_view()),
+    path("devices/", DeviceRegisterView.as_view(), name="device-register"),
+    path("devices/delete/", DeviceDeleteView.as_view(), name="device-delete"),
 ]

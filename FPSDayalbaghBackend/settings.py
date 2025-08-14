@@ -298,7 +298,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'corsheaders',  # ✅ required for CORS
     'orders.apps.OrdersConfig',
-    'notifications.apps.NotificationsConfig',
+    'notifications',
     'users',
     'products',
 ]
