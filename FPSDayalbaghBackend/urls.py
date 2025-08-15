@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/", include("orders.urls")),
     path('api/csrf/', CSRFTokenView.as_view(), name='csrf'),
     path("api/me/", include("notifications.urls")),
+    path("api/", include("billing.urls")),
 ]
 
 # Serve media/static only in dev
