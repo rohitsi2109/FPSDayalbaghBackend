@@ -301,6 +301,7 @@ INSTALLED_APPS = [
     'notifications',
     'users',
     'products',
+    'billing.apps.BillingConfig'
 ]
 
 MIDDLEWARE = [
