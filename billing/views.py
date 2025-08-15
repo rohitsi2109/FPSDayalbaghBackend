@@ -24,6 +24,7 @@ class POSCreateInvoiceView(APIView):
         return Response({
             "ok": True,
             "invoice_id": inv.id,
+            "invoice_number": str(inv.id),   # helpful for clients
             "total": str(inv.total),
             "paid_amount": str(inv.paid_amount),
             "status": inv.status,
@@ -45,6 +46,7 @@ class InvoicePayView(APIView):
         return Response({
             "ok": True,
             "invoice_id": inv.id,
+            "invoice_number": str(inv.id),
             "paid_amount": str(inv.paid_amount),
             "status": inv.status,
             "payment_id": payment.id,

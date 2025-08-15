@@ -22,7 +22,6 @@ class BillingInvoice(models.Model):
     mode = models.CharField(max_length=10, choices=MODE_CHOICES)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_OPEN)
 
-    # Link to online order if present (kept nullable for POS invoices)
     order = models.ForeignKey(
         "orders.Order", null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices"
     )
@@ -34,6 +33,10 @@ class BillingInvoice(models.Model):
     cashier = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="pos_sales"
     )
+
+    # NEW: store ad-hoc name/phone when no user link
+    customer_name = models.CharField(max_length=120, blank=True, default="")
+    customer_phone = models.CharField(max_length=20, blank=True, default="")
 
     # amounts
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)

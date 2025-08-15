@@ -12,7 +12,15 @@ class BillingPaymentInline(admin.TabularInline):
 
 @admin.register(BillingInvoice)
 class BillingInvoiceAdmin(admin.ModelAdmin):
-    list_display = ("id", "mode", "status", "order", "customer", "cashier", "total", "paid_amount", "created_at")
+    list_display = (
+        "id", "mode", "status", "order",
+        "customer", "customer_name", "customer_phone",
+        "cashier", "total", "paid_amount", "created_at"
+    )
     list_filter = ("mode", "status", "cashier")
-    search_fields = ("id", "order__id", "customer__username", "cashier__username")
+    search_fields = (
+        "id", "order__id",
+        "customer__username", "cashier__username",
+        "customer_name", "customer_phone",
+    )
     inlines = [BillingItemInline, BillingPaymentInline]
