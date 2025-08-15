@@ -381,3 +381,7 @@ AUTH_USER_MODEL = 'users.User'
 
 FIREBASE_PROJECT_ID = "fair-price-shop-6e85e"
 FIREBASE_ADMIN_CREDENTIALS_FILE = BASE_DIR / "firebase-admin.json"
+
+
+BILLING_TRIGGER_STATUSES = {"PAID", "COMPLETED"}  # any you like (case-insensitive)
+BILLING_ONLINE_METHOD = "online"                  # or "upi"/"card"/"cod"
