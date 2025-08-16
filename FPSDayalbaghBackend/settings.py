@@ -385,3 +385,4 @@ FIREBASE_ADMIN_CREDENTIALS_FILE = BASE_DIR / "firebase-admin.json"
 
 BILLING_TRIGGER_STATUSES = {"PAID", "COMPLETED"}  # any you like (case-insensitive)
 BILLING_ONLINE_METHOD = "online"                  # or "upi"/"card"/"cod"
+ORDERS_INCLUDE_SHIPPING_PHONE_MATCH = True
