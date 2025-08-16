@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from .models import BillingInvoice, BillingItem, BillingPayment
-from orders.models import Order, OrderItem, OrderStatus
+from orders.models import Order, OrderItem, OrderStatus,OrderSource
 from products.models import Product
 
 
@@ -108,6 +108,7 @@ class POSCreateSerializer(serializers.Serializer):
         order = Order.objects.create(
             user=cashier,
             status=OrderStatus.PENDING,
+            source=OrderSource.POS,
             payment_method=pm_order,
             shipping_name=addr["shipping_name"],
             shipping_phone=addr["shipping_phone"],
