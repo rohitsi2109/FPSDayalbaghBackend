@@ -66,7 +66,6 @@
 #     def __str__(self):
 #         return f"{self.product.name} x {self.quantity} (Order #{self.order_id})"
 
-
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -89,14 +88,14 @@ class Order(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="orders"
+        related_name="orders",
     )
     status = models.CharField(
         max_length=12,
         choices=OrderStatus.choices,
-        default=OrderStatus.PENDING
+        default=OrderStatus.PENDING,
     )
-    # NEW: where did this order come from?
+    # Where did this order come from?
     source = models.CharField(
         max_length=8,
         choices=OrderSource.choices,
@@ -113,7 +112,7 @@ class Order(models.Model):
 
     # Shipping snapshot
     shipping_name = models.CharField(max_length=120)
-    shipping_phone = models.CharField(max_length=20)
+    shipping_phone = models.CharField(max_length=20, db_index=True)
     address_line1 = models.CharField(max_length=255)
     address_line2 = models.CharField(max_length=255, blank=True, default="")
     city = models.CharField(max_length=100)
@@ -131,8 +130,7 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    from products.models import Product
-
+    # snapshot of product & price at purchase time
     order = models.ForeignKey(
         Order, on_delete=models.CASCADE, related_name="items"
     )
@@ -140,7 +138,7 @@ class OrderItem(models.Model):
         "products.Product", on_delete=models.PROTECT, related_name="order_items"
     )
     quantity = models.PositiveIntegerField()
-    unit_price = models.DecimalField(max_digits=10, decimal_places=2)  # snapshot
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     line_total = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
