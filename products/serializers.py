@@ -44,3 +44,17 @@ class ProductSerializer(serializers.ModelSerializer):
             url = obj.image.url
             return request.build_absolute_uri(url) if request else url
         return None
+
+
+class ProductBulkUpdateItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    stock = serializers.IntegerField(required=False, min_value=0)
+    price = serializers.DecimalField(required=False, max_digits=10, decimal_places=2)
+
+class ProductBulkUpdateSerializer(serializers.Serializer):
+    items = ProductBulkUpdateItemSerializer(many=True)
+
+    def validate(self, data):
+        if not data.get("items"):
+            raise serializers.ValidationError({"items": "At least one item is required."})
+        return data
