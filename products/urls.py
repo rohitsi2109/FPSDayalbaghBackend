@@ -15,3 +15,6 @@ urlpatterns = [
     path("products/bulk_update/", ProductBulkUpdateView.as_view(), name="products-bulk-update"),
     path("reports/daily-sales/", DailySalesReportView.as_view(), name="reports-daily-sales"),
 ]
+
+
+#updated today
