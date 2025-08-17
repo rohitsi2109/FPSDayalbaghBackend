@@ -26,7 +26,7 @@ from datetime import datetime, date, timedelta
 from django.utils.timezone import make_aware, get_current_timezone
 from django.db import transaction
 from django.db.models import Sum, F
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAdminUser
@@ -34,7 +34,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser
-
+from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
 from .models import Product
@@ -161,35 +161,35 @@ class StockExcelUploadView(APIView):
 
 # ---------- 2) Download Excel of current stock ----------
 class StockExcelDownloadView(APIView):
-    """
-    GET -> returns .xlsx of all products (or ?category=).
-    Columns: id, name, category, stock, price
-    """
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        qs = Product.objects.select_related("category").order_by("name")
-        cat = request.query_params.get("category")
-        if cat:
-            qs = qs.filter(category__name__iexact=cat)
-
         wb = Workbook()
         ws = wb.active
-        ws.title = "Products"
-        ws.append(["id", "name", "category", "stock", "price"])
+        ws.title = "Stock"
+        ws.append(["ID", "Name", "Category", "Price", "Stock"])
+        qs = Product.objects.select_related("category").order_by("name")
         for p in qs:
-            ws.append([p.id, p.name, getattr(p.category, "name", ""), p.stock, float(p.price)])
+            ws.append([
+                p.id,
+                p.name,
+                p.category.name if p.category_id else "",
+                str(p.price),   # keep as string to avoid locale issues
+                p.stock,
+            ])
 
         buf = BytesIO()
         wb.save(buf)
         buf.seek(0)
+        filename = f'stock_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
 
-        resp = HttpResponse(
-            buf.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        # FileResponse streams efficiently
+        resp = FileResponse(
+            buf,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        fname = f"products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        resp["Content-Disposition"] = f'attachment; filename="{fname}"'
         return resp
 
 
