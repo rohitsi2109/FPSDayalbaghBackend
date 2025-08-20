@@ -25,7 +25,7 @@ from io import BytesIO
 from datetime import datetime, date, timedelta
 from django.utils.timezone import make_aware, get_current_timezone
 from django.db import transaction
-from django.db.models import Sum, F
+from django.db.models import Sum, Count
 from django.http import HttpResponse, FileResponse
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
@@ -36,7 +36,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
-
+from billing.models import BillingInvoice
 from .models import Product
 from .serializers import (
     ProductSerializer,
@@ -240,6 +240,104 @@ class ProductBulkUpdateView(APIView):
 # Uses Order / OrderItem from your orders app.
 from orders.models import Order, OrderItem, OrderStatus, OrderSource
 
+# class DailySalesReportView(APIView):
+#     """
+#     GET params:
+#       - date=YYYY-MM-DD (default: today)
+#       - format=xlsx -> download Excel, else JSON
+#     """
+#     permission_classes = [IsAdminUser]
+#
+#     def get(self, request):
+#         tz = get_current_timezone()
+#         date_str = request.query_params.get("date")
+#         if date_str:
+#             y, m, d = map(int, date_str.split("-"))
+#             day = date(y, m, d)
+#         else:
+#             day = date.today()
+#
+#         start = make_aware(datetime.combine(day, datetime.min.time()), tz)
+#         end = start + timedelta(days=1)
+#
+#         paid_like = [OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.COMPLETED]
+#
+#         orders = (
+#             Order.objects
+#             .filter(created_at__gte=start, created_at__lt=end, status__in=paid_like)
+#             .select_related("user")
+#         )
+#
+#         # Totals
+#         orders_count = orders.count()
+#         revenue_total = orders.aggregate(s=Sum("total_amount"))["s"] or 0
+#
+#         # Split by source
+#         src = (
+#             orders.values("source")
+#             .annotate(orders=Sum(1), revenue=Sum("total_amount"))
+#             .order_by()
+#         )
+#         by_source = {row["source"]: {"orders": row["orders"], "revenue": float(row["revenue"] or 0)} for row in src}
+#
+#         # Items aggregation
+#         items = (
+#             OrderItem.objects
+#             .filter(order__in=orders)
+#             .select_related("product__category")
+#             .values("product_id", "product__name", "product__category__name")
+#             .annotate(qty=Sum("quantity"), amount=Sum("line_total"))
+#             .order_by("-qty")
+#         )
+#         by_product = [
+#             {
+#                 "product_id": r["product_id"],
+#                 "name": r["product__name"],
+#                 "category": r["product__category__name"],
+#                 "quantity": int(r["qty"] or 0),
+#                 "amount": float(r["amount"] or 0),
+#             }
+#             for r in items
+#         ]
+#         units_sold = sum(x["quantity"] for x in by_product)
+#
+#         if request.query_params.get("format") == "xlsx":
+#             # Build Excel
+#             wb = Workbook()
+#             ws1 = wb.active
+#             ws1.title = "Summary"
+#             ws1.append(["Date", str(day)])
+#             ws1.append(["Orders", orders_count])
+#             ws1.append(["Units sold", units_sold])
+#             ws1.append(["Revenue", float(revenue_total)])
+#             ws1.append([])
+#             ws1.append(["Source", "Orders", "Revenue"])
+#             for s in (OrderSource.ONLINE, OrderSource.POS):
+#                 vals = by_source.get(s, {"orders": 0, "revenue": 0.0})
+#                 ws1.append([s, vals["orders"], vals["revenue"]])
+#
+#             ws2 = wb.create_sheet("By Product")
+#             ws2.append(["product_id", "name", "category", "quantity", "amount"])
+#             for r in by_product:
+#                 ws2.append([r["product_id"], r["name"], r["category"], r["quantity"], r["amount"]])
+#
+#             buf = BytesIO()
+#             wb.save(buf); buf.seek(0)
+#             resp = HttpResponse(
+#                 buf.getvalue(),
+#                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+#             )
+#             resp["Content-Disposition"] = f'attachment; filename="sales_{day.isoformat()}.xlsx"'
+#             return resp
+#
+#         return Response({
+#             "date": day.isoformat(),
+#             "orders": orders_count,
+#             "units_sold": units_sold,
+#             "revenue": float(revenue_total),
+#             "by_source": by_source,
+#             "by_product": by_product[:500],  # cap
+#         })
 class DailySalesReportView(APIView):
     """
     GET params:
@@ -275,10 +373,36 @@ class DailySalesReportView(APIView):
         # Split by source
         src = (
             orders.values("source")
-            .annotate(orders=Sum(1), revenue=Sum("total_amount"))
+            .annotate(orders=Count("id"), revenue=Sum("total_amount"))
             .order_by()
         )
-        by_source = {row["source"]: {"orders": row["orders"], "revenue": float(row["revenue"] or 0)} for row in src}
+        by_source = {
+            row["source"]: {
+                "orders": row["orders"],
+                "revenue": float(row["revenue"] or 0)
+            } for row in src
+        }
+
+        # Split by cashier (POS vs ONLINE)
+        invoices = (
+            BillingInvoice.objects
+            .filter(created_at__gte=start, created_at__lt=end, status=BillingInvoice.STATUS_PAID)
+            .select_related("cashier", "order")
+        )
+
+        by_cashier = []
+        for inv in invoices:
+            if inv.mode == BillingInvoice.MODE_MANUAL:  # POS / Offline
+                cashier_name = inv.cashier.get_username() if inv.cashier else "Unknown"
+            else:  # Online order (no cashier, fallback to order.user if needed)
+                cashier_name = inv.order.user.get_username() if inv.order and inv.order.user else "N/A"
+
+            by_cashier.append({
+                "invoice_id": inv.id,
+                "cashier": cashier_name,
+                "mode": inv.mode,
+                "amount": float(inv.total or 0),
+            })
 
         # Items aggregation
         items = (
@@ -301,8 +425,8 @@ class DailySalesReportView(APIView):
         ]
         units_sold = sum(x["quantity"] for x in by_product)
 
+        # Excel export
         if request.query_params.get("format") == "xlsx":
-            # Build Excel
             wb = Workbook()
             ws1 = wb.active
             ws1.title = "Summary"
@@ -311,6 +435,7 @@ class DailySalesReportView(APIView):
             ws1.append(["Units sold", units_sold])
             ws1.append(["Revenue", float(revenue_total)])
             ws1.append([])
+
             ws1.append(["Source", "Orders", "Revenue"])
             for s in (OrderSource.ONLINE, OrderSource.POS):
                 vals = by_source.get(s, {"orders": 0, "revenue": 0.0})
@@ -321,6 +446,11 @@ class DailySalesReportView(APIView):
             for r in by_product:
                 ws2.append([r["product_id"], r["name"], r["category"], r["quantity"], r["amount"]])
 
+            ws3 = wb.create_sheet("By Cashier")
+            ws3.append(["invoice_id", "cashier", "mode", "amount"])
+            for r in by_cashier:
+                ws3.append([r["invoice_id"], r["cashier"], r["mode"], r["amount"]])
+
             buf = BytesIO()
             wb.save(buf); buf.seek(0)
             resp = HttpResponse(
@@ -330,11 +460,13 @@ class DailySalesReportView(APIView):
             resp["Content-Disposition"] = f'attachment; filename="sales_{day.isoformat()}.xlsx"'
             return resp
 
+        # JSON response
         return Response({
             "date": day.isoformat(),
             "orders": orders_count,
             "units_sold": units_sold,
             "revenue": float(revenue_total),
             "by_source": by_source,
+            "by_cashier": by_cashier,
             "by_product": by_product[:500],  # cap
         })
