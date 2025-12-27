@@ -1,15 +1,63 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-    <title>Welcome to FPS API</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dayalbagh FPS | Backend System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'style.css' %}">
 </head>
+
 <body>
-    <div class="container">
-        <h1>Fair Price Shop Backend</h1>
-        <p>This API handles user registration, login, product catalog, and order management.</p>
-        <p>Use endpoints like <code>/api/users/register/</code> and <code>/api/users/login/</code> for access.</p>
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+    </div>
+
+    <div class="main-container">
+        <header>
+            <div class="logo">FPS Dayalbagh</div>
+            <nav>
+                <a href="/admin/">Admin Panel</a>
+                <a href="/api/products" class="btn-secondary">API Docs</a>
+            </nav>
+        </header>
+
+        <section class="hero">
+            <div class="hero-content">
+                <span class="badge">Backend Operational</span>
+                <h1>Powering the Future of <br><span class="gradient-text">Fair Price Shops</span></h1>
+                <p>A robust backend system managing inventory, orders, and user authentication seamlessly.</p>
+                <div class="cta-group">
+                    <a href="/admin/" class="btn-primary">Manage Inventory</a>
+                    <a href="/admin/" class="btn-outline">View Orders</a>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Inventory</h3>
+                    <p>Real-time Updates</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Secure</h3>
+                    <p>Auth & Permissions</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Fast</h3>
+                    <p>Optimized API</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>&copy; {% now "Y" %} The Dayalbagh Consumers' Co-operative Society Limited</p>
+        </footer>
     </div>
 </body>
+
 </html>
