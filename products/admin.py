@@ -144,160 +144,89 @@ class ProductAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom = [
-            path("upload-csv/", self.admin_site.admin_view(self.upload_csv),
-                 name="products_product_upload_csv"),
-            path("export-csv/", self.admin_site.admin_view(self.export_csv),
-                 name="products_product_export_csv"),
+            path("upload-excel/", self.admin_site.admin_view(self.upload_excel),
+                 name="products_product_upload_excel"),
+            path("export-excel/", self.admin_site.admin_view(self.export_excel),
+                 name="products_product_export_excel"),
         ]
         return custom + urls
 
-    def upload_csv(self, request):
+    def upload_excel(self, request):
         """
-        Admin-only. Accepts your ledger format OR a normal headered CSV.
-        Upserts by (category, name). Existing -> update stock & price; new -> create.
+        Admin-only. Accepts Excel file with specific format.
+        Uses products.utils.process_stock_excel.
         """
         if request.method == "POST":
             f = request.FILES.get("file")
-            dry_run = request.POST.get("dry_run") == "on"
             if not f:
                 messages.error(request, "Please choose a file.")
-                return redirect("admin:products_product_upload_csv")
+                return redirect("admin:products_product_upload_excel")
 
-            raw = f.read()
+            from .utils import process_stock_excel
             try:
-                text = raw.decode("utf-8-sig")
-            except UnicodeDecodeError:
-                text = raw.decode("cp1252", errors="ignore")
+                results = process_stock_excel(f)
+                
+                # Check for errors
+                if results.get('errors'):
+                    for err in results['errors'][:10]: # show first 10
+                         messages.warning(request, err)
+                    if len(results['errors']) > 10:
+                        messages.warning(request, f"... and {len(results['errors']) - 10} more errors.")
 
-            # Detect format
-            first = (text.splitlines() or [""])[0].lower()
-            use_header_csv = ("," in first) and ("name" in first and "category" in first)
+                messages.success(request, 
+                    f"Upload Complete. "
+                    f"Categories: {results.get('categories_created')} created, {results.get('categories_updated')} updated. "
+                    f"Products: {results.get('products_created')} created, {results.get('products_updated')} updated."
+                )
 
-            try:
-                if use_header_csv:
-                    rows = parse_header_csv(io.BytesIO(raw))
-                else:
-                    rows = parse_ledger_text(text)
-                    rows = [{"code": None, **r} for r in rows]  # normalise shape
             except Exception as e:
                 messages.error(request, f"Parse error: {e}")
-                return redirect("admin:products_product_upload_csv")
+                return redirect("admin:products_product_upload_excel")
 
-            created_products = 0
-            updated_products = 0
-            created_categories = 0
-            errors = []
-            seen_cats = set()
-            has_code_field = _has_field(Product, "code")
-
-            try:
-                with transaction.atomic():
-                    for idx, r in enumerate(rows, start=1):
-                        try:
-                            cat_name = (r["category"] or "").strip()
-                            if not cat_name:
-                                raise ValueError("Missing category")
-                            category, cat_created = Category.objects.get_or_create(name=cat_name)
-                            if cat_created and cat_name.lower() not in seen_cats:
-                                created_categories += 1
-                                seen_cats.add(cat_name.lower())
-
-                            name = (r["name"] or "").strip()
-                            if not name:
-                                raise ValueError("Missing name")
-
-                            price = r["price"]
-                            stock = r["stock"]
-
-                            existing = Product.objects.filter(
-                                category=category, name__iexact=name
-                            ).first()
-
-                            if existing:
-                                changed = False
-                                if existing.price != price:
-                                    existing.price = price; changed = True
-                                if existing.stock != stock:
-                                    existing.stock = stock; changed = True
-                                if changed:
-                                    existing.save(update_fields=["price", "stock"])
-                                    updated_products += 1
-                            else:
-                                data = {
-                                    "name": name,
-                                    "category": category,
-                                    "price": price,
-                                    "stock": stock,
-                                }
-                                if has_code_field:
-                                    code = (r.get("code") or "").strip() or _unique_code_from_name(name, cat_name)
-                                    data["code"] = code
-                                Product.objects.create(**data)
-                                created_products += 1
-
-                        except Exception as e:
-                            errors.append({"row": idx, "name": r.get("name"), "error": str(e)})
-
-                    if dry_run:
-                        # rollback intentionally
-                        raise RuntimeError("__dry_run__")
-
-            except RuntimeError as e:
-                if str(e) != "__dry_run__":
-                    messages.error(request, f"Error: {e}")
-                    return redirect("admin:products_product_upload_csv")
-
-            context = {
-                "title": "Upload products CSV (result)",
-                "created_products": created_products,
-                "updated_products": updated_products,
-                "created_categories": created_categories,
-                "errors": errors,
-                "dry_run": dry_run,
-                "opts": self.model._meta,
-                "app_label": self.model._meta.app_label,
-            }
-            return render(request, "admin/products/product/upload_csv_result.html", context)
+            return redirect("admin:products_product_changelist")
 
         # GET → simple form
         context = {
-            "title": "Upload products CSV",
+            "title": "Upload products Excel",
             "opts": self.model._meta,
             "app_label": self.model._meta.app_label,
+            # We can reuse the csv template but renaming it or editing it would be cleaner. 
+            # For now re-use or assume a generic upload template exists. 
+            # Let's check templates later, or just use the same one if user hasn't provided details.
+            # Ideally we should probably create 'admin/products/product/upload_excel.html'.
         }
-        return render(request, "admin/products/product/upload_csv.html", context)
+        return render(request, "admin/products/product/upload_excel.html", context)
 
-    def export_csv(self, request):
-        """Download current inventory snapshot as CSV."""
+    def export_excel(self, request):
+        """Download current inventory snapshot as Excel."""
+        from openpyxl import Workbook
+        from django.http import FileResponse
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Stock"
+
         qs = Product.objects.select_related("category").order_by("category__name", "name")
         now = timezone.now().strftime("%Y-%m-%d_%H%M%S")
 
-        has_code = _has_field(Product, "code")
-        has_active = _has_field(Product, "is_active")
-        has_updated = _has_field(Product, "updated_at")
-
-        resp = HttpResponse(content_type="text/csv")
-        resp["Content-Disposition"] = f'attachment; filename="inventory_{now}.csv"'
-        w = csv.writer(resp)
-
-        header = []
-        if has_code: header.append("code")
-        header += ["name", "category", "price", "stock"]
-        if has_active: header.append("is_active")
-        if has_updated: header.append("updated_at")
-        w.writerow(header)
-
+        # Define columns (mirroring generic structure roughly, or just useful export)
+        ws.append(["Category", "Product Name", "Stock", "Rate"])
+        
         for p in qs:
-            row = []
-            if has_code: row.append(getattr(p, "code", ""))
-            row += [
+            ws.append([
+                p.category.name if p.category_id else "",
                 p.name,
-                (p.category.name if p.category_id else ""),
-                f"{p.price:.2f}",
                 p.stock,
-            ]
-            if has_active: row.append("1" if getattr(p, "is_active", True) else "0")
-            if has_updated: row.append(getattr(p, "updated_at", "") or "")
-            w.writerow(row)
+                p.price
+            ])
 
-        return resp
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        
+        return FileResponse(
+            buf,
+            as_attachment=True,
+            filename=f"inventory_{now}.xlsx",
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )

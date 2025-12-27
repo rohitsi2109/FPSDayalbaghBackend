@@ -3,6 +3,6 @@
 
 {% block object-tools-items %}
   {{ block.super }}
-  <li><a class="addlink" href="{% url 'admin:products_product_upload_csv' %}">{% trans "Upload CSV" %}</a></li>
-  <li><a class="historylink" href="{% url 'admin:products_product_export_csv' %}">{% trans "Export CSV" %}</a></li>
+  <li><a class="addlink" href="{% url 'admin:products_product_upload_excel' %}">{% trans "Upload Excel" %}</a></li>
+  <li><a class="historylink" href="{% url 'admin:products_product_export_excel' %}">{% trans "Export Excel" %}</a></li>
 {% endblock %}
