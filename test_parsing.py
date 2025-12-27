@@ -9,7 +9,7 @@ django.setup()
 from products.utils import process_stock_excel
 from products.models import Product, Category
 
-file_path = "REPORT.xlsx"
+file_path = "mock_report.xlsx"
 print(f"Testing parsing of {file_path}...")
 
 try:
@@ -28,10 +28,10 @@ try:
     
     # Check a specific item if known
     try:
-        p = Product.objects.get(name__icontains="B.CELL- AA PENCIL")
+        p = Product.objects.get(name__icontains="TV Samsung")
         print(f"Sample Check: {p.name} - Stock: {p.stock}, Price: {p.price}")
     except Product.DoesNotExist:
-        print("Sample 'B.CELL- AA PENCIL' not found.")
+        print("Sample 'TV Samsung' not found.")
         
 except Exception as e:
     print(f"Error: {e}")
