@@ -574,3 +574,66 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         order.status = OrderStatus.CANCELLED
         order.save(update_fields=["status"])
         return Response(OrderSerializer(order, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="remove-item")
+    def remove_item(self, request, pk=None):
+        """
+        Remove a specific item from the order.
+        Body: {"item_id": 123}
+        """
+        order = self.get_object()
+        item_id = request.data.get("item_id")
+        
+        if not item_id:
+            return Response({"detail": "item_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Allow basic editing only if PENDING (or CONFIRMED, depending on policy)
+        # Assuming we can edit as long as it's not Delivered/Cancelled
+        if order.status in [OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
+             return Response({"detail": "Cannot edit completed/cancelled orders."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            item = order.items.get(id=item_id)
+            # Restore stock? 
+            # If we follow the create logic, stock was deducted. So we should restore it.
+            product = item.product
+            product.stock += item.quantity
+            product.save(update_fields=["stock"])
+            
+            # Remove item
+            item.delete()
+            
+            # Optional: Recalculate total? 
+            # The Admin might overwrite it later, but keeping it consistent is good.
+            # But the prompt says "admin set price", so maybe we leave it or decrease it.
+            # Let's decrease it for correctness.
+            order.total_amount -= item.line_total
+            if order.total_amount < 0:
+                order.total_amount = 0
+            order.save(update_fields=["total_amount"])
+
+        except (ValueError, item.DoesNotExist, Exception) as e:
+            return Response({"detail": "Item not found or invalid."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(OrderSerializer(order, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="confirm-order")
+    def confirm_order(self, request, pk=None):
+        """
+        Confirm order and optionally update price.
+        Body: {"total_amount": 500.00}
+        """
+        order = self.get_object()
+        
+        # Only allow confirming if Pending
+        if order.status != OrderStatus.PENDING:
+            return Response({"detail": "Order is not in Pending state."}, status=status.HTTP_400_BAD_REQUEST)
+
+        new_total = request.data.get("total_amount")
+        if new_total is not None:
+            order.total_amount = new_total
+        
+        order.status = OrderStatus.CONFIRMED
+        order.save(update_fields=["status", "total_amount"])
+        
+        return Response(OrderSerializer(order, context={"request": request}).data)

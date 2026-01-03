@@ -72,7 +72,8 @@ from django.utils import timezone
 
 
 class OrderStatus(models.TextChoices):
-    PENDING = "PENDING", "Pending"
+    PENDING = "PENDING", "Pending (Waiting for Confirmation)"
+    CONFIRMED = "CONFIRMED", "Confirmed (Payment Pending)"
     READY = "READY", "Ready"
     RECEIVED = "RECEIVED", "Received"
     DELIVERED = "DELIVERED", "Delivered"
