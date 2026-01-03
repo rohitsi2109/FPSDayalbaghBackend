@@ -125,7 +125,7 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     confirm_phone = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
-    password = serializers.CharField(write_only=True, min_length=6, style={"input_type": "password"})
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
     class Meta:
         model = User
