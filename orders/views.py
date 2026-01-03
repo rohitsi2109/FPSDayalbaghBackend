@@ -637,3 +637,107 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         order.save(update_fields=["status", "total_amount"])
         
         return Response(OrderSerializer(order, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="add-item")
+    def add_item(self, request, pk=None):
+        """
+        Add a product to the order.
+        Body: {"product_id": 12, "quantity": 1}
+        """
+        order = self.get_object()
+        product_id = request.data.get("product_id")
+        quantity = int(request.data.get("quantity", 1))
+
+        if not product_id:
+            return Response({"detail": "product_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if order.status in [OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
+             return Response({"detail": "Cannot edit completed/cancelled orders."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from products.models import Product  # Lazy import to avoid circular dependency if any
+        try:
+            product = Product.objects.get(id=product_id)
+            if product.stock < quantity:
+                return Response({"detail": f"Not enough stock. Available: {product.stock}"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if item already exists
+            existing_item = order.items.filter(product=product).first()
+            if existing_item:
+                existing_item.quantity += quantity
+                existing_item.line_total = existing_item.quantity * existing_item.unit_price
+                existing_item.save(update_fields=["quantity", "line_total"])
+            else:
+                unit_price = product.price # Snapshot price
+                line_total = unit_price * quantity
+                order.items.create(
+                    product=product,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    line_total=line_total
+                )
+            
+            # Deduct stock
+            product.stock -= quantity
+            product.save(update_fields=["stock"])
+
+            # Update Order Total?
+            # Keeping consistent with remove_item, let's update it.
+            # But remember Confirm might overwrite it.
+            order.total_amount += (product.price * quantity)
+            order.save(update_fields=["total_amount"])
+
+        except Product.DoesNotExist:
+            return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(OrderSerializer(order, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="update-item-quantity")
+    def update_item_quantity(self, request, pk=None):
+        """
+        Update quantity of an existing item.
+        Body: {"item_id": 123, "quantity": 5}
+        """
+        order = self.get_object()
+        item_id = request.data.get("item_id")
+        new_quantity = int(request.data.get("quantity", 0))
+
+        if not item_id:
+            return Response({"detail": "item_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if new_quantity < 1:
+             return Response({"detail": "Quantity must be at least 1. Use remove-item to delete."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.status in [OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
+             return Response({"detail": "Cannot edit completed/cancelled orders."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            item = order.items.get(id=item_id)
+            product = item.product
+            
+            diff = new_quantity - item.quantity
+            
+            if diff > 0: # Increasing quantity
+                if product.stock < diff:
+                    return Response({"detail": f"Not enough stock. Available: {product.stock}"}, status=status.HTTP_400_BAD_REQUEST)
+                product.stock -= diff
+            else: # Decreasing quantity
+                product.stock += abs(diff) # Restore stock
+            
+            product.save(update_fields=["stock"])
+
+            # Update item
+            item.quantity = new_quantity
+            item.line_total = item.quantity * item.unit_price
+            item.save(update_fields=["quantity", "line_total"])
+
+            # Update Order Total
+            # We need to recalculate carefully or just add the diff * price
+            # Diff calculation:
+            order.total_amount += (diff * item.unit_price)
+            if order.total_amount < 0: order.total_amount = 0
+            order.save(update_fields=["total_amount"])
+
+        except (ValueError, item.DoesNotExist, Exception) as e:
+            return Response({"detail": "Item not found or invalid."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(OrderSerializer(order, context={"request": request}).data)
