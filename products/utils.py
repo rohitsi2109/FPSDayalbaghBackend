@@ -5,6 +5,11 @@ from .models import Category, Product
 
 from django.db import transaction
 
+def normalize_name(name):
+    if not name:
+        return ""
+    return re.sub(r'[^a-z0-9]', '', str(name).lower())
+
 def process_stock_excel(file_path):
     """
     Parses the stock excel file and updates the database using BULK operations.
@@ -20,9 +25,6 @@ def process_stock_excel(file_path):
     parsed_rows = [] 
     
     # 2. First Pass: Collect Categories and structure data
-    # We need to know which row belongs to which category
-    # to associate products correctly.
-    
     current_cat_name = None
     
     for r_idx, row in enumerate(rows, start=8):
@@ -74,10 +76,10 @@ def process_stock_excel(file_path):
     }
 
     # 4. Prepare Product Maps
-    # We need to map (category_id, clean_name) -> product_obj
+    # Use aggressive normalization for matching
     all_products = Product.objects.all()
     product_map = {
-        (p.category_id, p.name.lower().strip()): p 
+        normalize_name(p.name): p 
         for p in all_products
     }
     
@@ -88,7 +90,7 @@ def process_stock_excel(file_path):
     for item in parsed_rows:
         cat_obj = existing_cats.get(item['cat_name'])
         if not cat_obj:
-            continue # Should not happen
+            continue 
             
         # Parse Name
         raw_name = item['desc']
@@ -111,15 +113,17 @@ def process_stock_excel(file_path):
             except Exception:
                 price = Decimal('0.00')
 
-        # Check existence
-        key = (cat_obj.id, clean_name.lower())
-        existing_prod = product_map.get(key)
+        # Check existence using aggressive normalization
+        norm_key = normalize_name(clean_name)
+        existing_prod = product_map.get(norm_key)
         
         if existing_prod:
-            # Update if changed
-            if existing_prod.stock != stock or existing_prod.price != price:
-                existing_prod.stock = stock
-                existing_prod.price = price
+            # Update instance directly (it might be in product_map or products_to_create)
+            existing_prod.stock = stock
+            existing_prod.price = price
+            
+            # If it's an existing DB product and not in update list yet
+            if existing_prod.pk and existing_prod not in products_to_update:
                 products_to_update.append(existing_prod)
         else:
             # Create new
@@ -130,8 +134,8 @@ def process_stock_excel(file_path):
                 price=price
             )
             products_to_create.append(new_p)
-            # Add to map to prevent duplicates within the same file!
-            product_map[key] = new_p
+            # Add to map to prevent duplicates within the same file
+            product_map[norm_key] = new_p
 
     # 6. Bulk Commit Products
     with transaction.atomic():
@@ -140,7 +144,9 @@ def process_stock_excel(file_path):
             processed_counts['products_created'] = len(products_to_create)
             
         if products_to_update:
-            Product.objects.bulk_update(products_to_update, ['stock', 'price'])
-            processed_counts['products_updated'] = len(products_to_update)
+            to_update_db = [p for p in products_to_update if p.pk]
+            if to_update_db:
+                Product.objects.bulk_update(to_update_db, ['stock', 'price'])
+                processed_counts['products_updated'] = len(to_update_db)
 
     return processed_counts
