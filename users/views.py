@@ -207,3 +207,25 @@ class LoginView(APIView):
             {"token": token.key, "user": UserSerializer(user).data},
             status=status.HTTP_200_OK,
         )
+
+
+class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        phone = request.data.get('phone')
+        new_password = request.data.get('new_password')
+
+        if not phone or not new_password:
+            return Response({"error": "Phone and new_password are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from .models import User
+            user = User.objects.get(phone=phone)
+            user.set_password(new_password)
+            user.save()
+            return Response({"message": "Password updated successfully"}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "User with this phone number does not exist"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
