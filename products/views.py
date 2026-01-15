@@ -33,7 +33,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.filters import SearchFilter, OrderingFilter
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 from billing.models import BillingInvoice
@@ -58,6 +58,18 @@ class ProductListView(ListAPIView):
         if category:
             qs = qs.filter(category__name__iexact=category)
         return qs
+
+from rest_framework.generics import RetrieveUpdateAPIView
+
+class ProductDetailView(RetrieveUpdateAPIView):
+    """
+    GET /api/products/<id>/ -> get product
+    PATCH /api/products/<id>/ -> update product (supports image upload)
+    """
+    permission_classes = [IsAdminUser]
+    serializer_class = ProductSerializer
+    queryset = Product.objects.all()
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
 # ---------- 1) Upload Excel -> Update stock/price ----------
