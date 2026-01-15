@@ -456,7 +456,7 @@ def _filtered_queryset(request, base_qs):
     if since:
         dt = parse_datetime(since)
         if dt:
-            base_qs = base_qs.filter(created_at__gte=dt)
+            base_qs = base_qs.filter(updated_at__gte=dt)
 
     return base_qs
 

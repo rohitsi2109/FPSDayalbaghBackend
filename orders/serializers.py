@@ -313,6 +313,7 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     source_display = serializers.CharField(source="get_source_display", read_only=True)
+    customer_phone = serializers.CharField(source="user.phone", read_only=True)
 
     class Meta:
         model = Order
@@ -321,9 +322,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "status", "status_display",
             "source", "source_display",
             "payment_method", "total_amount",
-            "shipping_name", "shipping_phone",
+            "shipping_name", "shipping_phone", "customer_phone",
             "address_line1", "address_line2", "city", "state", "pincode",
-            "items", "created_at",
+            "items", "created_at", "updated_at",
         ]
 
 
