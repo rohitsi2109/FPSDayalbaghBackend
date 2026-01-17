@@ -522,13 +522,9 @@ class UserOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="remove-item")
     def remove_item(self, request, pk=None):
-        """
-        Customer removes an item from their PENDING order.
-        """
         order = self.get_object()
         if order.user_id != request.user.id:
             return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
-        
         if order.status != OrderStatus.PENDING:
             return Response({"detail": "Only pending orders can be edited."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -538,40 +534,33 @@ class UserOrderViewSet(viewsets.ModelViewSet):
 
         try:
             item = order.items.get(id=item_id)
-            # Restore stock
             product = item.product
             product.stock += item.quantity
             product.save(update_fields=["stock"])
             
-            # Remove item
+            lt = item.line_total
             item.delete()
             
-            # Update total
-            order.total_amount -= item.line_total
-            if order.total_amount < 0:
-                order.total_amount = 0
+            order.total_amount -= lt
+            if order.total_amount < 0: order.total_amount = 0
             order.save(update_fields=["total_amount"])
+        except Exception:
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        except Exception as e:
-            return Response({"detail": "Item not found or invalid."}, status=status.HTTP_404_NOT_FOUND)
-
-        return Response(OrderSerializer(order, context={"request": request}).data)
+        # Re-fetch to clear prefetch caches
+        order = self.get_queryset().get(pk=order.pk)
+        return Response(UserOrderSerializer(order, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="add-item")
     def add_item(self, request, pk=None):
-        """
-        Customer adds an item to their PENDING order.
-        """
         order = self.get_object()
         if order.user_id != request.user.id:
             return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
-
         if order.status != OrderStatus.PENDING:
             return Response({"detail": "Only pending orders can be edited."}, status=status.HTTP_400_BAD_REQUEST)
 
         product_id = request.data.get("product_id")
         quantity = int(request.data.get("quantity", 1))
-
         if not product_id:
             return Response({"detail": "product_id is required."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -579,7 +568,7 @@ class UserOrderViewSet(viewsets.ModelViewSet):
         try:
             product = Product.objects.get(id=product_id)
             if product.stock < quantity:
-                return Response({"detail": f"Not enough stock. Available: {product.stock}"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Not enough stock."}, status=status.HTTP_400_BAD_REQUEST)
             
             existing_item = order.items.filter(product=product).first()
             if existing_item:
@@ -587,72 +576,60 @@ class UserOrderViewSet(viewsets.ModelViewSet):
                 existing_item.line_total = existing_item.quantity * existing_item.unit_price
                 existing_item.save(update_fields=["quantity", "line_total"])
             else:
-                unit_price = product.price
-                line_total = unit_price * quantity
                 order.items.create(
                     product=product,
                     quantity=quantity,
-                    unit_price=unit_price,
-                    line_total=line_total
+                    unit_price=product.price,
+                    line_total=product.price * quantity
                 )
             
-            # Deduct stock
             product.stock -= quantity
             product.save(update_fields=["stock"])
-
-            # Update total
             order.total_amount += (product.price * quantity)
             order.save(update_fields=["total_amount"])
-
         except Product.DoesNotExist:
             return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response(OrderSerializer(order, context={"request": request}).data)
+        order = self.get_queryset().get(pk=order.pk)
+        return Response(UserOrderSerializer(order, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="update-item-quantity")
     def update_item_quantity(self, request, pk=None):
-        """
-        Customer updates quantity of an item in their PENDING order.
-        """
         order = self.get_object()
         if order.user_id != request.user.id:
             return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
-
         if order.status != OrderStatus.PENDING:
             return Response({"detail": "Only pending orders can be edited."}, status=status.HTTP_400_BAD_REQUEST)
 
         item_id = request.data.get("item_id")
-        new_quantity = int(request.data.get("quantity", 0))
-
-        if not item_id:
-            return Response({"detail": "item_id is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if new_quantity < 1:
-             return Response({"detail": "Quantity must be at least 1."}, status=status.HTTP_400_BAD_REQUEST)
+        new_qty = int(request.data.get("quantity", 0))
+        if not item_id or new_qty < 1:
+            return Response({"detail": "Invalid item_id or quantity."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             item = order.items.get(id=item_id)
             product = item.product
-            diff = new_quantity - item.quantity
+            diff = new_qty - item.quantity
             
             if diff > 0:
                 if product.stock < diff:
-                    return Response({"detail": f"Not enough stock. Available: {product.stock}"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"detail": "Not enough stock."}, status=status.HTTP_400_BAD_REQUEST)
                 product.stock -= diff
             else:
                 product.stock += abs(diff)
             
             product.save(update_fields=["stock"])
-            item.quantity = new_quantity
+            item.quantity = new_qty
             item.line_total = item.quantity * item.unit_price
             item.save(update_fields=["quantity", "line_total"])
             order.total_amount += (diff * item.unit_price)
             if order.total_amount < 0: order.total_amount = 0
             order.save(update_fields=["total_amount"])
-        except Exception as e:
-            return Response({"detail": "Item not found or invalid."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response(OrderSerializer(order, context={"request": request}).data)
+        order = self.get_queryset().get(pk=order.pk)
+        return Response(UserOrderSerializer(order, context={"request": request}).data)
 
 
 class AdminOrderViewSet(viewsets.ModelViewSet):
