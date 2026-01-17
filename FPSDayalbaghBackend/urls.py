@@ -16,6 +16,11 @@ urlpatterns = [
     path("api/", include("billing.urls")),
 ]
 
+# ✅ Branding & Customization
+admin.site.site_header = "FPS Admin"
+admin.site.site_title = "FPS Admin Portal"
+admin.site.index_title = "Welcome to FPS Admin Portal"
+
 # Serve media/static only in dev
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
