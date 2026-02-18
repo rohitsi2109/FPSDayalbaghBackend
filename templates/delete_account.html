@@ -1,0 +1,347 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Account | Dayalbagh FPS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+    <style>
+        .page-container {
+            max-width: 620px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+            color: #e2e8f0;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 32px;
+            color: #818cf8;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .back-link:hover { text-decoration: underline; }
+        h1 {
+            font-size: 1.9rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .subtitle {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-bottom: 36px;
+        }
+        /* Steps */
+        .steps {
+            counter-reset: step;
+            margin-bottom: 36px;
+        }
+        .step {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .step-num {
+            counter-increment: step;
+            min-width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #4f46e5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .step-text h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0 0 4px;
+        }
+        .step-text p {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin: 0;
+            line-height: 1.5;
+        }
+        /* Data table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 36px;
+            font-size: 0.9rem;
+        }
+        .data-table th {
+            text-align: left;
+            padding: 10px 14px;
+            background: rgba(99,102,241,0.15);
+            color: #a5b4fc;
+            font-weight: 600;
+        }
+        .data-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            color: #cbd5e1;
+            vertical-align: top;
+        }
+        .badge-del {
+            background: rgba(239,68,68,0.15);
+            color: #fca5a5;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .badge-keep {
+            background: rgba(234,179,8,0.15);
+            color: #fde68a;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        /* Form card */
+        .form-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 32px;
+        }
+        .form-card h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0 0 6px;
+        }
+        .form-card .form-note {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 24px;
+        }
+        .field {
+            margin-bottom: 18px;
+        }
+        .field label {
+            display: block;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .field input {
+            width: 100%;
+            padding: 11px 14px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            color: #f1f5f9;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .field input:focus {
+            border-color: #6366f1;
+        }
+        .warning-box {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            color: #fca5a5;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        .btn-delete {
+            width: 100%;
+            padding: 13px;
+            background: #dc2626;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-delete:hover { background: #b91c1c; }
+        .btn-delete:disabled { background: #6b7280; cursor: not-allowed; }
+        /* Feedback */
+        .msg { display: none; border-radius: 10px; padding: 14px 18px; font-size: 0.9rem; margin-top: 16px; }
+        .msg.success { display: block; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: #86efac; }
+        .msg.error   { display: block; background: rgba(239,68,68,0.1);  border: 1px solid rgba(239,68,68,0.3);  color: #fca5a5; }
+        /* Alt contact */
+        .alt-contact {
+            font-size: 0.88rem;
+            color: #64748b;
+            text-align: center;
+        }
+        .alt-contact a { color: #818cf8; }
+        footer { margin-top: 60px; text-align: center; font-size: 0.82rem; color: #475569; }
+    </style>
+</head>
+<body>
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+    </div>
+
+    <div class="page-container">
+        <a href="/" class="back-link">← Back to Home</a>
+
+        <h1>Delete Your Account</h1>
+        <p class="subtitle">
+            Dayalbagh FPS &mdash; by The Dayalbagh Consumers' Co-operative Society Limited
+        </p>
+
+        <!-- Steps -->
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    <h3>Verify your identity</h3>
+                    <p>Enter the phone number and password you use to log in to the Dayalbagh FPS app.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    <h3>Submit deletion request</h3>
+                    <p>Click <strong>Delete My Account</strong>. Your account and personal data will be permanently deleted immediately.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    <h3>Confirmation</h3>
+                    <p>You will see a confirmation message. You will no longer be able to log in and your data will be removed from our servers.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data retention table -->
+        <h2 style="font-size:1.05rem; font-weight:700; margin-bottom:14px;">What data is deleted &amp; what is kept</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Action</th>
+                    <th>Retention</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Name, phone number, address, gender</td>
+                    <td><span class="badge-del">Deleted</span></td>
+                    <td>Immediately</td>
+                </tr>
+                <tr>
+                    <td>Login credentials &amp; auth token</td>
+                    <td><span class="badge-del">Deleted</span></td>
+                    <td>Immediately</td>
+                </tr>
+                <tr>
+                    <td>Device / notification tokens</td>
+                    <td><span class="badge-del">Deleted</span></td>
+                    <td>Immediately</td>
+                </tr>
+                <tr>
+                    <td>Order history</td>
+                    <td><span class="badge-keep">Retained</span></td>
+                    <td>Up to 3 years for accounting &amp; legal compliance. Orders are anonymised — your name and contact details are removed.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Self-service form -->
+        <div class="form-card">
+            <h2>Delete account now</h2>
+            <p class="form-note">This action is permanent and cannot be undone.</p>
+
+            <div class="field">
+                <label for="phone">Registered phone number</label>
+                <input type="tel" id="phone" placeholder="e.g. 9876543210" maxlength="15">
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Your account password">
+            </div>
+
+            <div class="warning-box">
+                &#9888; Deleting your account is irreversible. All your personal information will be permanently removed. Order history will be anonymised and retained for legal purposes.
+            </div>
+
+            <button class="btn-delete" id="deleteBtn" onclick="submitDeletion()">Delete My Account</button>
+            <div class="msg" id="feedback"></div>
+        </div>
+
+        <p class="alt-contact">
+            Prefer to contact us directly? Email us at
+            <a href="mailto:dayalbaghfps@gmail.com">dayalbaghfps@gmail.com</a>
+            or call <a href="tel:+918279379620">+91 8279379620</a>
+        </p>
+
+        <footer>
+            <p>&copy; {% now "Y" %} The Dayalbagh Consumers' Co-operative Society Limited</p>
+            <p style="margin-top:6px;">
+                <a href="/privacy-policy/" style="color:#818cf8; text-decoration:none;">Privacy Policy</a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        async function submitDeletion() {
+            const phone    = document.getElementById('phone').value.trim();
+            const password = document.getElementById('password').value;
+            const btn      = document.getElementById('deleteBtn');
+            const feedback = document.getElementById('feedback');
+
+            feedback.className = 'msg';
+            feedback.textContent = '';
+
+            if (!phone || !password) {
+                feedback.className = 'msg error';
+                feedback.textContent = 'Please enter both your phone number and password.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Deleting...';
+
+            try {
+                const res = await fetch('/api/users/delete-account/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, password }),
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    feedback.className = 'msg success';
+                    feedback.textContent = 'Your account has been permanently deleted. Thank you for using Dayalbagh FPS.';
+                    btn.style.display = 'none';
+                    document.getElementById('phone').disabled = true;
+                    document.getElementById('password').disabled = true;
+                } else {
+                    feedback.className = 'msg error';
+                    feedback.textContent = data.error || 'Something went wrong. Please check your credentials and try again.';
+                    btn.disabled = false;
+                    btn.textContent = 'Delete My Account';
+                }
+            } catch (e) {
+                feedback.className = 'msg error';
+                feedback.textContent = 'Network error. Please try again later.';
+                btn.disabled = false;
+                btn.textContent = 'Delete My Account';
+            }
+        }
+    </script>
+</body>
+</html>

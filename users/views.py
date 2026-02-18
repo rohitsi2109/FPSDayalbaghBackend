@@ -175,6 +175,10 @@ def privacy_policy_view(request):
     return render(request, "privacy_policy.html")
 
 
+def delete_account_view(request):
+    return render(request, "delete_account.html")
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
@@ -233,3 +237,33 @@ class PasswordResetView(APIView):
             return Response({"error": "User with this phone number does not exist"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DeleteAccountView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        phone = request.data.get('phone', '').strip()
+        password = request.data.get('password', '')
+
+        if not phone or not password:
+            return Response({"error": "Phone and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(request, phone=phone, password=password)
+        if not user:
+            return Response({"error": "Invalid phone number or password."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Anonymise linked orders before deleting the user
+        from orders.models import Order
+        Order.objects.filter(user=user).update(
+            shipping_name="Deleted User",
+            shipping_phone="",
+            address_line1="",
+            address_line2="",
+        )
+
+        # Delete auth token and user record
+        Token.objects.filter(user=user).delete()
+        user.delete()
+
+        return Response({"message": "Account permanently deleted."}, status=status.HTTP_200_OK)
