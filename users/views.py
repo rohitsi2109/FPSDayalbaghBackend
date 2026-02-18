@@ -171,6 +171,10 @@ def home_view(request):
     return render(request, "index.html")
 
 
+def privacy_policy_view(request):
+    return render(request, "privacy_policy.html")
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 

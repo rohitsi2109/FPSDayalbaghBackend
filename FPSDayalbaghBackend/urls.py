@@ -3,11 +3,12 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from users.views import home_view, CSRFTokenView
+from users.views import home_view, privacy_policy_view, CSRFTokenView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home_view),
+    path('privacy-policy/', privacy_policy_view, name='privacy_policy'),
     path('api/users/', include('users.urls')),
     path('api/', include('products.urls')),
     path("api/", include("orders.urls")),

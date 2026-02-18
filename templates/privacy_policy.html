@@ -1,0 +1,155 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy | Dayalbagh FPS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+    <style>
+        .policy-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+            color: #e2e8f0;
+            line-height: 1.8;
+        }
+        .policy-container h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .policy-container .updated {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 40px;
+        }
+        .policy-container h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-top: 36px;
+            margin-bottom: 10px;
+            color: #f8fafc;
+        }
+        .policy-container p, .policy-container li {
+            font-size: 0.97rem;
+            color: #cbd5e1;
+        }
+        .policy-container ul {
+            padding-left: 20px;
+            margin-top: 8px;
+        }
+        .policy-container ul li {
+            margin-bottom: 6px;
+        }
+        .policy-container a {
+            color: #818cf8;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 32px;
+            color: #818cf8;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+    </div>
+
+    <div class="policy-container">
+        <a href="/" class="back-link">← Back to Home</a>
+
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: February 18, 2026</p>
+
+        <p>
+            This Privacy Policy describes how <strong>The Dayalbagh Consumers' Co-operative Society Limited</strong>
+            ("we", "us", or "our") collects, uses, and protects information you provide when using the
+            <strong>Dayalbagh FPS</strong> mobile application ("App").
+        </p>
+
+        <h2>1. Information We Collect</h2>
+        <p>When you register or use the App, we collect the following information:</p>
+        <ul>
+            <li><strong>Name</strong> — to identify you on orders and deliveries.</li>
+            <li><strong>Phone Number</strong> — used as your unique login identifier.</li>
+            <li><strong>Address</strong> — used to process and deliver your orders.</li>
+            <li><strong>Gender</strong> (optional) — for account personalisation.</li>
+            <li><strong>Order History</strong> — items ordered and their status.</li>
+            <li><strong>Device Token</strong> — to send push notifications about your orders.</li>
+        </ul>
+
+        <h2>2. How We Use Your Information</h2>
+        <ul>
+            <li>To create and manage your account.</li>
+            <li>To process and fulfil your orders.</li>
+            <li>To send order status notifications via push.</li>
+            <li>To allow admins to confirm orders and pricing.</li>
+            <li>To improve the App and our services.</li>
+        </ul>
+
+        <h2>3. Data Storage &amp; Security</h2>
+        <p>
+            Your data is stored securely on cloud servers (Supabase / PostgreSQL). Passwords are
+            hashed and never stored in plain text. We use token-based authentication to protect
+            API access. We do not sell or rent your personal data to any third party.
+        </p>
+
+        <h2>4. Data Sharing</h2>
+        <p>
+            We do <strong>not</strong> share your personal information with any third parties except:
+        </p>
+        <ul>
+            <li>As required by applicable law or government authority.</li>
+            <li>With our internal admin team solely to process your orders.</li>
+        </ul>
+
+        <h2>5. Push Notifications</h2>
+        <p>
+            The App uses Firebase Cloud Messaging (FCM) to send order-related notifications.
+            You may disable notifications at any time from your device settings. Firebase's
+            privacy policy applies to notification delivery.
+        </p>
+
+        <h2>6. Data Retention</h2>
+        <p>
+            We retain your personal data for as long as your account is active or as needed to
+            provide services. You may request deletion of your account by contacting us.
+        </p>
+
+        <h2>7. Children's Privacy</h2>
+        <p>
+            This App is not directed to children under the age of 13. We do not knowingly collect
+            personal information from children.
+        </p>
+
+        <h2>8. Changes to This Policy</h2>
+        <p>
+            We may update this Privacy Policy from time to time. Changes will be posted on this
+            page with an updated date. Continued use of the App after changes constitutes your
+            acceptance of the revised policy.
+        </p>
+
+        <h2>9. Contact Us</h2>
+        <p>
+            If you have any questions about this Privacy Policy, please contact us at:<br>
+            <strong>The Dayalbagh Consumers' Co-operative Society Limited</strong><br>
+            Dayalbagh, Agra, Uttar Pradesh — 282005<br>
+            Phone: <a href="tel:+918279379620">+91 8279379620</a>
+        </p>
+
+        <br>
+        <p style="color:#64748b; font-size:0.85rem;">
+            &copy; {% now "Y" %} The Dayalbagh Consumers' Co-operative Society Limited. All rights reserved.
+        </p>
+    </div>
+</body>
+</html>
