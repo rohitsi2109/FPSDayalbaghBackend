@@ -427,7 +427,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_datetime, parse_date
 
 from .models import Order, OrderStatus, OrderSource
 from .serializers import OrderSerializer, OrderCreateSerializer, UserOrderSerializer
@@ -437,7 +437,7 @@ from django.db.models import Q
 
 def _filtered_queryset(request, base_qs):
     """
-    Apply ?status=, ?since=, and ?source= filters.
+    Apply ?status=, ?since=, ?source=, ?date_from=, ?date_to= filters.
     """
     # ?status=
     status_param = request.query_params.get("status")
@@ -457,6 +457,20 @@ def _filtered_queryset(request, base_qs):
         dt = parse_datetime(since)
         if dt:
             base_qs = base_qs.filter(updated_at__gte=dt)
+
+    # ?date_from=2025-08-11  (filter created_at >= date)
+    date_from = request.query_params.get("date_from")
+    if date_from:
+        d = parse_date(date_from)
+        if d:
+            base_qs = base_qs.filter(created_at__date__gte=d)
+
+    # ?date_to=2025-08-15  (filter created_at <= date)
+    date_to = request.query_params.get("date_to")
+    if date_to:
+        d = parse_date(date_to)
+        if d:
+            base_qs = base_qs.filter(created_at__date__lte=d)
 
     return base_qs
 
@@ -677,9 +691,9 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         order = self.get_object()
-        if order.status != OrderStatus.PENDING:
+        if order.status in [OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
             return Response(
-                {"detail": "Only pending orders can be cancelled."},
+                {"detail": "Cannot cancel delivered/already-cancelled orders."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         order.status = OrderStatus.CANCELLED
@@ -735,7 +749,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         Body: {"total_amount": 500.00}
         """
         order = self.get_object()
-        
+
         # Only allow confirming if Pending
         if order.status != OrderStatus.PENDING:
             return Response({"detail": "Order is not in Pending state."}, status=status.HTTP_400_BAD_REQUEST)
@@ -743,10 +757,40 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         new_total = request.data.get("total_amount")
         if new_total is not None:
             order.total_amount = new_total
-        
+
         order.status = OrderStatus.CONFIRMED
         order.save(update_fields=["status", "total_amount"])
-        
+
+        return Response(OrderSerializer(order, context={"request": request}).data)
+
+    @action(detail=True, methods=["patch"], url_path="update-amount")
+    def update_amount(self, request, pk=None):
+        """
+        Update total_amount for orders in PENDING, CONFIRMED, or RECEIVED state.
+        Body: {"total_amount": 500.00}
+        """
+        order = self.get_object()
+
+        allowed = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.RECEIVED]
+        if order.status not in allowed:
+            return Response(
+                {"detail": "Amount can only be edited for Pending, Confirmed, or Received orders."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_total = request.data.get("total_amount")
+        if new_total is None:
+            return Response({"detail": "total_amount is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            new_total = float(new_total)
+            if new_total < 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({"detail": "total_amount must be a non-negative number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.total_amount = new_total
+        order.save(update_fields=["total_amount"])
         return Response(OrderSerializer(order, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="add-item")

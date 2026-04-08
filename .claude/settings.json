@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(python manage.py makemigrations orders --name add_created_at_index)",
+      "Bash(flutter analyze:*)"
+    ]
+  }
+}
