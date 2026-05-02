@@ -288,34 +288,24 @@ class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_id = serializers.IntegerField(source="product.id", read_only=True)
     image_url = serializers.SerializerMethodField()
-    thumbnail_url = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
         fields = [
             "id", "product_id", "product_name",
             "quantity", "unit_price", "line_total",
-            "image_url", "thumbnail_url",
+            "image_url",
         ]
 
-    def _resolve_url(self, file_field):
+    def get_image_url(self, obj):
         request = self.context.get("request")
+        img = getattr(obj.product, "image", None)
         try:
-            if file_field and getattr(file_field, "url", None):
-                url = file_field.url
-                if url.startswith("http"):
-                    return url
-                return request.build_absolute_uri(url) if request else url
+            if img and getattr(img, "url", None):
+                return request.build_absolute_uri(img.url) if request else img.url
         except Exception:
             pass
         return None
-
-    def get_image_url(self, obj):
-        return self._resolve_url(getattr(obj.product, "image", None))
-
-    def get_thumbnail_url(self, obj):
-        thumb = getattr(obj.product, "thumbnail", None)
-        return self._resolve_url(thumb) or self._resolve_url(getattr(obj.product, "image", None))
 
 
 class OrderSerializer(serializers.ModelSerializer):

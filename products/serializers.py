@@ -28,7 +28,6 @@ from .models import Product
 
 class ProductSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
-    thumbnail_url = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True)
 
     class Meta:
@@ -36,26 +35,17 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'stock', 'price',
             'category', 'category_name',
-            'image', 'image_url', 'thumbnail_url',
+            'image', 'image_url',   # keep only fields that exist on the model
         ]
 
-    def _resolve_url(self, file_field):
-        if file_field and hasattr(file_field, 'url'):
-            try:
-                url = file_field.url
-            except Exception:
-                return None
+    def get_image_url(self, obj):
+        if obj.image and hasattr(obj.image, 'url'):
+            url = obj.image.url
             if url.startswith('http'):
                 return url
             request = self.context.get('request')
             return request.build_absolute_uri(url) if request else url
         return None
-
-    def get_image_url(self, obj):
-        return self._resolve_url(obj.image)
-
-    def get_thumbnail_url(self, obj):
-        return self._resolve_url(obj.thumbnail) or self._resolve_url(obj.image)
 
 
 class ProductBulkUpdateItemSerializer(serializers.Serializer):
