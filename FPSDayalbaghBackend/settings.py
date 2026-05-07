@@ -392,7 +392,9 @@ AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = 'public-read'
 AWS_S3_CUSTOM_DOMAIN = 'autsahhilzzsiaowhisk.supabase.co/storage/v1/object/public/product'
 AWS_S3_OBJECT_PARAMETERS = {
-    'CacheControl': 'max-age=86400',
+    # Filenames are unique (AWS_S3_FILE_OVERWRITE=False auto-suffixes on collision),
+    # so objects are effectively immutable — cache for 1 year and skip revalidation.
+    'CacheControl': 'public, max-age=31536000, immutable',
 }
 
 STORAGES = {
