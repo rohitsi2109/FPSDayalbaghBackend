@@ -298,6 +298,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'corsheaders',  # ✅ required for CORS
     'storages',     # ✅ for S3 storage
+    'drf_spectacular',  # ✅ OpenAPI schema + Swagger UI
     'orders.apps.OrdersConfig',
     'notifications',
     'users',
@@ -324,6 +325,14 @@ REST_FRAMEWORK = {
         # 'rest_framework.authentication.SessionAuthentication',  # optional
     ),
     'COERCE_DECIMAL_TO_STRING': False,  # send Decimal fields as numbers, not strings
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'FPS Dayalbagh API',
+    'DESCRIPTION': 'API documentation for the FPS Dayalbagh backend.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
 
 

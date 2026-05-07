@@ -3,7 +3,10 @@
     "allow": [
       "Bash(xargs grep:*)",
       "Bash(python manage.py makemigrations orders --name add_created_at_index)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(e:/FPS/FPS/FPSDayalbaghBackend/myenv/Scripts/pip.exe install *)",
+      "Bash(e:/FPS/FPS/FPSDayalbaghBackend/myenv/Scripts/python.exe e:/FPS/FPS/FPSDayalbaghBackend/manage.py check)",
+      "Bash(\"C:/Users/rohit/AppData/Local/Programs/Python/Python310/python.exe\" -m pip install \"drf-spectacular==0.27.2\")"
     ]
   }
 }

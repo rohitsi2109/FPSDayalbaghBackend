@@ -12,3 +12,4 @@ firebase-admin==6.5.0
 openpyxl==3.1.5
 django-storages
 boto3
+drf-spectacular==0.27.2
