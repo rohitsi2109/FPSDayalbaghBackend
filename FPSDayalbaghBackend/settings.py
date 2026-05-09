@@ -379,18 +379,30 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# ✅ S3 Storage Settings (Supabase)
+# S3 Storage Settings (AWS S3 by default; Supabase still works via env override).
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'product')
-AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'ap-south-1')
-AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', 'https://autsahhilzzsiaowhisk.storage.supabase.co/storage/v1/s3')
+AWS_STORAGE_BUCKET_NAME = os.environ.get(
+    'AWS_STORAGE_BUCKET_NAME', 'fairprice-211125406099-ap-southeast-2-an'
+)
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'ap-southeast-2')
+
+# Empty string env var = treat as unset (so production can clear the
+# old Supabase endpoint just by exporting AWS_S3_ENDPOINT_URL="").
+AWS_S3_ENDPOINT_URL = (os.environ.get('AWS_S3_ENDPOINT_URL') or '').strip() or None
+AWS_S3_CUSTOM_DOMAIN = (os.environ.get('AWS_S3_CUSTOM_DOMAIN') or '').strip() or None
+
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_QUERYSTRING_AUTH = False
-AWS_S3_ADDRESSING_STYLE = 'path'
+# Path-style works for both Supabase and our AWS bucket. Virtual-hosted style
+# breaks for this AWS bucket because its name contains "ap-southeast-2",
+# which collides with AWS's regional-endpoint URL parser. Override via env
+# if you ever migrate to a bucket name that's safe for virtual-hosted style.
+AWS_S3_ADDRESSING_STYLE = os.environ.get('AWS_S3_ADDRESSING_STYLE', 'path')
 AWS_S3_FILE_OVERWRITE = False
-AWS_DEFAULT_ACL = 'public-read'
-AWS_S3_CUSTOM_DOMAIN = 'autsahhilzzsiaowhisk.supabase.co/storage/v1/object/public/product'
+# Modern AWS buckets disable ACLs ("Bucket owner enforced"); rely on a bucket
+# policy for public read instead. Set to 'public-read' via env if you must.
+AWS_DEFAULT_ACL = os.environ.get('AWS_DEFAULT_ACL') or None
 AWS_S3_OBJECT_PARAMETERS = {
     # Filenames are unique (AWS_S3_FILE_OVERWRITE=False auto-suffixes on collision),
     # so objects are effectively immutable — cache for 1 year and skip revalidation.

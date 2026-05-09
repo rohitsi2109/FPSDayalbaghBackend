@@ -1,2 +1,8 @@
 myenv/
 .env
+.env.*
+__pycache__/
+*.pyc
+
+# Local backup of Supabase storage — never commit (large, redundant)
+supabase_backup/
