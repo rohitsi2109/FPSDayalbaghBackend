@@ -36,12 +36,17 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
+import logging
+
 from billing.models import BillingInvoice
 from .models import Product
+from .inventory import apply_delta, Reason
 from .serializers import (
     ProductSerializer,
     ProductBulkUpdateSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 # ---------- Existing products list ----------
 class ProductListView(ListAPIView):
@@ -94,9 +99,13 @@ class StockExcelUploadView(APIView):
         # request.FILES['file'] is likely an InMemoryUploadedFile or TemporaryUploadedFile
         
         try:
-             results = process_stock_excel(f)
-        except Exception as e:
-             return Response({"detail": f"Error processing file: {str(e)}"}, status=400)
+            results = process_stock_excel(f, user=request.user)
+        except Exception:
+            logger.exception("Stock excel upload failed")
+            return Response(
+                {"detail": "Could not process the file. Please check the format and try again."},
+                status=400,
+            )
 
         return Response({
             "ok": True,
@@ -163,20 +172,23 @@ class ProductBulkUpdateView(APIView):
                 pid = it["id"]
                 try:
                     obj = Product.objects.select_for_update().get(pk=pid)
-                    fields = []
+                    changed = False
                     if "stock" in it:
-                        obj.stock = int(it["stock"])
-                        fields.append("stock")
+                        delta = int(it["stock"]) - obj.stock
+                        if delta != 0:
+                            apply_delta(
+                                obj, delta, reason=Reason.BULK_EDIT,
+                                user=request.user, reference="bulk-edit",
+                            )
+                        changed = True
                     if "price" in it:
                         obj.price = it["price"]
-                        fields.append("price")
-                    if fields:
-                        obj.save(update_fields=fields)
+                        obj.save(update_fields=["price"])
+                        changed = True
+                    if changed:
                         updated += 1
                 except Product.DoesNotExist:
                     errors.append(f"Product {pid} not found")
-                except Exception as e:
-                    errors.append(f"Product {pid}: {e}")
 
         return Response({"ok": True, "updated": updated, "errors": errors})
 

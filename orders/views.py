@@ -427,12 +427,106 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import transaction, IntegrityError
 from django.utils.dateparse import parse_datetime, parse_date
 
-from .models import Order, OrderStatus, OrderSource
+from .models import Order, OrderItem, OrderStatus, OrderSource
 from .serializers import OrderSerializer, OrderCreateSerializer, UserOrderSerializer
+from products.models import Product
+from products.inventory import (
+    apply_delta, reserve, release, commit_reservation, InsufficientStock, Reason,
+)
 from django.conf import settings
 from django.db.models import Q
+
+
+# --- Inventory phase helpers (reservation model) --------------------------
+#
+# An order's items affect inventory differently depending on its status:
+#
+#   PENDING                      -> RESERVED  : items hold `reserved` units;
+#                                               physical `stock` is untouched.
+#   CONFIRMED/READY/RECEIVED/... -> COMMITTED : `stock` has been decremented;
+#                                               reservation released.
+#   CANCELLED                    -> FREED     : neither reserved nor deducted.
+#
+# Whenever an order's status crosses a phase boundary we must move every line's
+# units between these buckets so inventory stays exactly consistent, no matter
+# which endpoint drives the change.
+
+def _inventory_phase(status_value):
+    if status_value == OrderStatus.PENDING:
+        return "RESERVED"
+    if status_value == OrderStatus.CANCELLED:
+        return "FREED"
+    return "COMMITTED"
+
+
+def _transition_order_inventory(order, old_status, new_status, user):
+    """
+    Move every line's units between reserved/stock buckets for a status change.
+
+    Must be called inside an open transaction. Locks each product row. Raises
+    InsufficientStock if a backward transition (e.g. un-cancelling) can't secure
+    the units it needs.
+    """
+    old_phase = _inventory_phase(old_status)
+    new_phase = _inventory_phase(new_status)
+    if old_phase == new_phase:
+        return
+
+    items = list(order.items.select_related("product").all())
+    if not items:
+        return
+
+    pids = [i.product_id for i in items]
+    locked = {
+        p.id: p
+        for p in Product.objects.select_for_update().filter(id__in=pids)
+    }
+    ref = f"order:{order.id}"
+
+    for item in items:
+        p = locked.get(item.product_id)
+        if p is None:
+            continue
+        qty = item.quantity
+
+        if old_phase == "RESERVED" and new_phase == "COMMITTED":
+            commit_reservation(p, qty, user=user, reference=ref)
+        elif old_phase == "RESERVED" and new_phase == "FREED":
+            release(p, qty)
+        elif old_phase == "COMMITTED" and new_phase == "FREED":
+            apply_delta(p, qty, reason=Reason.RETURN, user=user, reference=ref)
+        elif old_phase == "COMMITTED" and new_phase == "RESERVED":
+            apply_delta(p, qty, reason=Reason.RETURN, user=user, reference=ref)
+            reserve(p, qty)
+        elif old_phase == "FREED" and new_phase == "RESERVED":
+            reserve(p, qty)
+        elif old_phase == "FREED" and new_phase == "COMMITTED":
+            apply_delta(p, -qty, reason=Reason.SALE, user=user, reference=ref)
+
+
+def _adjust_item_inventory(order, product, delta, user):
+    """
+    Apply a per-line unit change (+add / -remove) to the right inventory bucket.
+
+    On a PENDING order units are reserved/released; on a committed order (any
+    live non-cancelled status past PENDING) physical stock is decremented/
+    restored. The caller MUST already hold a lock on `product`. Raises
+    InsufficientStock when there aren't enough units for an increase.
+    """
+    if delta == 0:
+        return
+    ref = f"order:{order.id}"
+    if order.status == OrderStatus.PENDING:
+        if delta > 0:
+            reserve(product, delta)
+        else:
+            release(product, -delta)
+    else:
+        reason = Reason.SALE if delta > 0 else Reason.RETURN
+        apply_delta(product, -delta, reason=reason, user=user, reference=ref)
 
 
 def _filtered_queryset(request, base_qs):
@@ -516,6 +610,58 @@ class UserOrderViewSet(viewsets.ModelViewSet):
         # Use the user-facing serializer (labels POS nicely)
         return OrderCreateSerializer if self.action == "create" else UserOrderSerializer
 
+    def create(self, request, *args, **kwargs):
+        """
+        Idempotent order creation.
+
+        If the client sends an `Idempotency-Key` (header or body field), a retry
+        with the same key returns the ALREADY-created order (HTTP 200) instead of
+        placing a duplicate. Clients that send no key keep the original behaviour.
+        """
+        raw = (
+            request.headers.get("Idempotency-Key")
+            or request.data.get("idempotency_key")
+            or ""
+        )
+        key = str(raw).strip() or None
+
+        def _existing_response():
+            existing = Order.objects.filter(
+                user=request.user, idempotency_key=key
+            ).first()
+            if existing:
+                return Response(
+                    UserOrderSerializer(
+                        existing, context=self.get_serializer_context()
+                    ).data,
+                    status=status.HTTP_200_OK,
+                )
+            return None
+
+        # Fast path: key already used -> return that order, do NOT touch stock.
+        if key:
+            hit = _existing_response()
+            if hit is not None:
+                return hit
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.save(idempotency_key=key)
+        except IntegrityError:
+            # A concurrent request with the same key won the unique-constraint
+            # race; return that order rather than erroring.
+            hit = _existing_response()
+            if hit is not None:
+                return hit
+            raise
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED,
+            headers=self.get_success_headers(serializer.data),
+        )
+
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         # Ensure user can only cancel their own ONLINE orders
@@ -530,8 +676,13 @@ class UserOrderViewSet(viewsets.ModelViewSet):
                 {"detail": "Only pending orders can be cancelled."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        order.status = OrderStatus.CANCELLED
-        order.save(update_fields=["status"])
+        with transaction.atomic():
+            # Release the units this pending order was holding, then cancel.
+            _transition_order_inventory(
+                order, order.status, OrderStatus.CANCELLED, request.user
+            )
+            order.status = OrderStatus.CANCELLED
+            order.save(update_fields=["status"])
         return Response(OrderSerializer(order, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="remove-item")
@@ -547,18 +698,20 @@ class UserOrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": "item_id is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            item = order.items.get(id=item_id)
-            product = item.product
-            product.stock += item.quantity
-            product.save(update_fields=["stock"])
-            
-            lt = item.line_total
-            item.delete()
-            
-            order.total_amount -= lt
-            if order.total_amount < 0: order.total_amount = 0
-            order.save(update_fields=["total_amount"])
-        except Exception:
+            with transaction.atomic():
+                item = order.items.select_related("product").get(id=item_id)
+                # Lock the product row and release its reservation (PENDING order).
+                product = Product.objects.select_for_update().get(pk=item.product_id)
+                _adjust_item_inventory(order, product, -item.quantity, request.user)
+
+                lt = item.line_total
+                item.delete()
+
+                order.total_amount -= lt
+                if order.total_amount < 0:
+                    order.total_amount = 0
+                order.save(update_fields=["total_amount"])
+        except OrderItem.DoesNotExist:
             return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Re-fetch to clear prefetch caches
@@ -577,30 +730,33 @@ class UserOrderViewSet(viewsets.ModelViewSet):
         quantity = int(request.data.get("quantity", 1))
         if not product_id:
             return Response({"detail": "product_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if quantity < 1:
+            return Response({"detail": "Quantity must be at least 1."}, status=status.HTTP_400_BAD_REQUEST)
 
-        from products.models import Product
         try:
-            product = Product.objects.get(id=product_id)
-            if product.stock < quantity:
-                return Response({"detail": "Not enough stock."}, status=status.HTTP_400_BAD_REQUEST)
-            
-            existing_item = order.items.filter(product=product).first()
-            if existing_item:
-                existing_item.quantity += quantity
-                existing_item.line_total = existing_item.quantity * existing_item.unit_price
-                existing_item.save(update_fields=["quantity", "line_total"])
-            else:
-                order.items.create(
-                    product=product,
-                    quantity=quantity,
-                    unit_price=product.price,
-                    line_total=product.price * quantity
-                )
-            
-            product.stock -= quantity
-            product.save(update_fields=["stock"])
-            order.total_amount += (product.price * quantity)
-            order.save(update_fields=["total_amount"])
+            with transaction.atomic():
+                # Lock the product row first so the check-and-reserve is atomic.
+                product = Product.objects.select_for_update().get(id=product_id)
+                try:
+                    _adjust_item_inventory(order, product, quantity, request.user)
+                except InsufficientStock:
+                    return Response({"detail": "Not enough stock."}, status=status.HTTP_400_BAD_REQUEST)
+
+                existing_item = order.items.filter(product=product).first()
+                if existing_item:
+                    existing_item.quantity += quantity
+                    existing_item.line_total = existing_item.quantity * existing_item.unit_price
+                    existing_item.save(update_fields=["quantity", "line_total"])
+                else:
+                    order.items.create(
+                        product=product,
+                        quantity=quantity,
+                        unit_price=product.price,
+                        line_total=product.price * quantity
+                    )
+
+                order.total_amount += (product.price * quantity)
+                order.save(update_fields=["total_amount"])
         except Product.DoesNotExist:
             return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -621,25 +777,26 @@ class UserOrderViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Invalid item_id or quantity."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            item = order.items.get(id=item_id)
-            product = item.product
-            diff = new_qty - item.quantity
-            
-            if diff > 0:
-                if product.stock < diff:
-                    return Response({"detail": "Not enough stock."}, status=status.HTTP_400_BAD_REQUEST)
-                product.stock -= diff
-            else:
-                product.stock += abs(diff)
-            
-            product.save(update_fields=["stock"])
-            item.quantity = new_qty
-            item.line_total = item.quantity * item.unit_price
-            item.save(update_fields=["quantity", "line_total"])
-            order.total_amount += (diff * item.unit_price)
-            if order.total_amount < 0: order.total_amount = 0
-            order.save(update_fields=["total_amount"])
-        except Exception:
+            with transaction.atomic():
+                item = order.items.select_related("product").get(id=item_id)
+                product = Product.objects.select_for_update().get(pk=item.product_id)
+                diff = new_qty - item.quantity
+
+                if diff != 0:
+                    # diff > 0 needs more units (reserve); diff < 0 frees them.
+                    try:
+                        _adjust_item_inventory(order, product, diff, request.user)
+                    except InsufficientStock:
+                        return Response({"detail": "Not enough stock."}, status=status.HTTP_400_BAD_REQUEST)
+
+                item.quantity = new_qty
+                item.line_total = item.quantity * item.unit_price
+                item.save(update_fields=["quantity", "line_total"])
+                order.total_amount += (diff * item.unit_price)
+                if order.total_amount < 0:
+                    order.total_amount = 0
+                order.save(update_fields=["total_amount"])
+        except OrderItem.DoesNotExist:
             return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
         order = self.get_queryset().get(pk=order.pk)
@@ -684,8 +841,19 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 {"detail": f"Invalid status. Use one of {sorted(list(valid))}."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        order.status = new_status
-        order.save(update_fields=["status"])
+        old_status = order.status
+        try:
+            with transaction.atomic():
+                # Move inventory between reserved/stock buckets if the status
+                # change crosses a phase boundary (e.g. PENDING -> CONFIRMED
+                # commits the reservation as a real sale).
+                _transition_order_inventory(
+                    order, old_status, new_status, request.user
+                )
+                order.status = new_status
+                order.save(update_fields=["status"])
+        except InsufficientStock as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(OrderSerializer(order, context={"request": request}).data)
 
     @action(detail=True, methods=["post"])
@@ -696,8 +864,14 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
                 {"detail": "Cannot cancel delivered/already-cancelled orders."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        order.status = OrderStatus.CANCELLED
-        order.save(update_fields=["status"])
+        with transaction.atomic():
+            # PENDING orders release their reservation; confirmed orders restore
+            # the physical stock they had deducted.
+            _transition_order_inventory(
+                order, order.status, OrderStatus.CANCELLED, request.user
+            )
+            order.status = OrderStatus.CANCELLED
+            order.save(update_fields=["status"])
         return Response(OrderSerializer(order, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="remove-item")
@@ -718,27 +892,21 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
              return Response({"detail": "Cannot edit completed/cancelled orders."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            item = order.items.get(id=item_id)
-            # Restore stock? 
-            # If we follow the create logic, stock was deducted. So we should restore it.
-            product = item.product
-            product.stock += item.quantity
-            product.save(update_fields=["stock"])
-            
-            # Remove item
-            item.delete()
-            
-            # Optional: Recalculate total? 
-            # The Admin might overwrite it later, but keeping it consistent is good.
-            # But the prompt says "admin set price", so maybe we leave it or decrease it.
-            # Let's decrease it for correctness.
-            order.total_amount -= item.line_total
-            if order.total_amount < 0:
-                order.total_amount = 0
-            order.save(update_fields=["total_amount"])
+            with transaction.atomic():
+                item = order.items.select_related("product").get(id=item_id)
+                # Free the units this line held (reservation if PENDING, else stock).
+                product = Product.objects.select_for_update().get(pk=item.product_id)
+                _adjust_item_inventory(order, product, -item.quantity, request.user)
 
-        except (ValueError, item.DoesNotExist, Exception) as e:
-            return Response({"detail": "Item not found or invalid."}, status=status.HTTP_404_NOT_FOUND)
+                lt = item.line_total
+                item.delete()
+
+                order.total_amount -= lt
+                if order.total_amount < 0:
+                    order.total_amount = 0
+                order.save(update_fields=["total_amount"])
+        except OrderItem.DoesNotExist:
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(OrderSerializer(order, context={"request": request}).data)
 
@@ -758,8 +926,13 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         if new_total is not None:
             order.total_amount = new_total
 
-        order.status = OrderStatus.CONFIRMED
-        order.save(update_fields=["status", "total_amount"])
+        with transaction.atomic():
+            # Convert this order's reservations into real stock decrements.
+            _transition_order_inventory(
+                order, order.status, OrderStatus.CONFIRMED, request.user
+            )
+            order.status = OrderStatus.CONFIRMED
+            order.save(update_fields=["status", "total_amount"])
 
         return Response(OrderSerializer(order, context={"request": request}).data)
 
@@ -808,39 +981,36 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         
         if order.status in [OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
              return Response({"detail": "Cannot edit completed/cancelled orders."}, status=status.HTTP_400_BAD_REQUEST)
+        if quantity < 1:
+            return Response({"detail": "Quantity must be at least 1."}, status=status.HTTP_400_BAD_REQUEST)
 
-        from products.models import Product  # Lazy import to avoid circular dependency if any
         try:
-            product = Product.objects.get(id=product_id)
-            if product.stock < quantity:
-                return Response({"detail": f"Not enough stock. Available: {product.stock}"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Check if item already exists
-            existing_item = order.items.filter(product=product).first()
-            if existing_item:
-                existing_item.quantity += quantity
-                existing_item.line_total = existing_item.quantity * existing_item.unit_price
-                existing_item.save(update_fields=["quantity", "line_total"])
-            else:
-                unit_price = product.price # Snapshot price
-                line_total = unit_price * quantity
-                order.items.create(
-                    product=product,
-                    quantity=quantity,
-                    unit_price=unit_price,
-                    line_total=line_total
-                )
-            
-            # Deduct stock
-            product.stock -= quantity
-            product.save(update_fields=["stock"])
+            with transaction.atomic():
+                # Lock the product row first so the check-and-apply is atomic.
+                product = Product.objects.select_for_update().get(id=product_id)
+                try:
+                    _adjust_item_inventory(order, product, quantity, request.user)
+                except InsufficientStock:
+                    avail = product.available if order.status == OrderStatus.PENDING else product.stock
+                    return Response({"detail": f"Not enough stock. Available: {avail}"},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
-            # Update Order Total?
-            # Keeping consistent with remove_item, let's update it.
-            # But remember Confirm might overwrite it.
-            order.total_amount += (product.price * quantity)
-            order.save(update_fields=["total_amount"])
+                existing_item = order.items.filter(product=product).first()
+                if existing_item:
+                    existing_item.quantity += quantity
+                    existing_item.line_total = existing_item.quantity * existing_item.unit_price
+                    existing_item.save(update_fields=["quantity", "line_total"])
+                else:
+                    unit_price = product.price  # Snapshot price
+                    order.items.create(
+                        product=product,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        line_total=unit_price * quantity,
+                    )
 
+                order.total_amount += (product.price * quantity)
+                order.save(update_fields=["total_amount"])
         except Product.DoesNotExist:
             return Response({"detail": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -866,33 +1036,30 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
              return Response({"detail": "Cannot edit completed/cancelled orders."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            item = order.items.get(id=item_id)
-            product = item.product
-            
-            diff = new_quantity - item.quantity
-            
-            if diff > 0: # Increasing quantity
-                if product.stock < diff:
-                    return Response({"detail": f"Not enough stock. Available: {product.stock}"}, status=status.HTTP_400_BAD_REQUEST)
-                product.stock -= diff
-            else: # Decreasing quantity
-                product.stock += abs(diff) # Restore stock
-            
-            product.save(update_fields=["stock"])
+            with transaction.atomic():
+                item = order.items.select_related("product").get(id=item_id)
+                product = Product.objects.select_for_update().get(pk=item.product_id)
+                diff = new_quantity - item.quantity
 
-            # Update item
-            item.quantity = new_quantity
-            item.line_total = item.quantity * item.unit_price
-            item.save(update_fields=["quantity", "line_total"])
+                if diff != 0:
+                    # diff > 0 needs more units; diff < 0 frees them. PENDING
+                    # orders adjust the reservation, committed orders the stock.
+                    try:
+                        _adjust_item_inventory(order, product, diff, request.user)
+                    except InsufficientStock:
+                        avail = product.available if order.status == OrderStatus.PENDING else product.stock
+                        return Response({"detail": f"Not enough stock. Available: {avail}"},
+                                        status=status.HTTP_400_BAD_REQUEST)
 
-            # Update Order Total
-            # We need to recalculate carefully or just add the diff * price
-            # Diff calculation:
-            order.total_amount += (diff * item.unit_price)
-            if order.total_amount < 0: order.total_amount = 0
-            order.save(update_fields=["total_amount"])
+                item.quantity = new_quantity
+                item.line_total = item.quantity * item.unit_price
+                item.save(update_fields=["quantity", "line_total"])
 
-        except (ValueError, item.DoesNotExist, Exception) as e:
-            return Response({"detail": "Item not found or invalid."}, status=status.HTTP_404_NOT_FOUND)
+                order.total_amount += (diff * item.unit_price)
+                if order.total_amount < 0:
+                    order.total_amount = 0
+                order.save(update_fields=["total_amount"])
+        except OrderItem.DoesNotExist:
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(OrderSerializer(order, context={"request": request}).data)

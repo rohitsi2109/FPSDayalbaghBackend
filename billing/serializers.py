@@ -8,6 +8,7 @@ from rest_framework import serializers
 from .models import BillingInvoice, BillingItem, BillingPayment
 from orders.models import Order, OrderItem, OrderStatus,OrderSource
 from products.models import Product
+from products.inventory import apply_delta, InsufficientStock, Reason
 
 
 class POSItemSerializer(serializers.Serializer):
@@ -136,12 +137,16 @@ class POSCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"items": f"Product {pid} not found."})
             if qty <= 0:
                 raise serializers.ValidationError({"items": "Quantity must be >= 1."})
-            if p.stock < int(qty):
-                raise serializers.ValidationError({"items": f"Insufficient stock for {p.name}."})
 
-            # decrement stock
-            p.stock -= int(qty)
-            p.save(update_fields=["stock"])
+            # Locked above via select_for_update; apply_delta guards against
+            # oversell and records the audit movement.
+            try:
+                apply_delta(p, -int(qty), reason=Reason.SALE, user=cashier,
+                            reference=f"order:{order.id}")
+            except InsufficientStock:
+                raise serializers.ValidationError(
+                    {"items": f"Insufficient stock for {p.name}."}
+                )
 
             line_total = qty * unit_price
             total += line_total

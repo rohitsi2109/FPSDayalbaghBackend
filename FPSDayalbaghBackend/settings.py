@@ -357,11 +357,32 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'FPSDayalbaghBackend.wsgi.application'
 
-# ✅ Railway DB config
-DATABASE_URL = 'postgresql://postgres.autsahhilzzsiaowhisk:Tome@nothing0@aws-0-ap-south-1.pooler.supabase.com:6543/postgres'
-DATABASES = {
-    'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60)
-}
+# ✅ Database config
+# Local testing uses SQLite so we NEVER touch the production database.
+#   - Set USE_SQLITE=1 in your local shell -> local db.sqlite3 file.
+#   - Production/Vercel leaves USE_SQLITE unset -> Postgres, behaviour unchanged.
+if os.environ.get('USE_SQLITE') == '1':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    # Prefer an env var (so the secret can move out of source control),
+    # falling back to the existing hardcoded URL to keep prod behaviour identical.
+    DATABASE_URL = os.environ.get('DATABASE_URL') or 'postgresql://postgres.autsahhilzzsiaowhisk:Tome@nothing0@aws-0-ap-south-1.pooler.supabase.com:6543/postgres'
+    # Supabase transaction pooler (port 6543 / PgBouncer) on serverless:
+    #   - conn_max_age=0: never persist connections. Serverless functions freeze
+    #     between invocations; a persisted socket goes stale and the NEXT request
+    #     fails *after* its transaction may have committed -> the client retries
+    #     and creates a duplicate. Open/close per request keeps this clean.
+    #   - DISABLE_SERVER_SIDE_CURSORS: transaction pooling doesn't keep the same
+    #     backend connection across statements, so named server-side cursors break.
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=0)
+    }
+    DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
 AUTH_PASSWORD_VALIDATORS = []
 

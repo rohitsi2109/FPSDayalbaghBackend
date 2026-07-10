@@ -29,11 +29,14 @@ from .models import Product
 class ProductSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True)
+    # Units a new customer can order right now (stock minus pending reservations).
+    # `stock` remains the physical on-hand count for admin/reporting.
+    available = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'stock', 'price',
+            'id', 'name', 'stock', 'available', 'price',
             'category', 'category_name',
             'image', 'image_url',   # keep only fields that exist on the model
         ]

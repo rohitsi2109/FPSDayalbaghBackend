@@ -276,6 +276,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from products.models import Product
+from products.inventory import apply_delta, reserve, InsufficientStock, Reason
 from .models import Order, OrderItem, OrderStatus, OrderSource
 
 
@@ -391,10 +392,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"items": f"Product {pid} not found."})
             if qty <= 0:
                 raise serializers.ValidationError({"items": "Quantity must be >= 1."})
-            if p.stock < qty:
+            if p.available < qty:
                 raise serializers.ValidationError({"items": f"Insufficient stock for {p.name}."})
 
-        # Create items & decrement stock
+        # Create items & reserve stock. Physical `stock` is only decremented when
+        # an admin confirms the order; until then the order holds a reservation
+        # that reduces what new customers can order.
         rows = []
         for item in items_data:
             pid = item["product_id"]
@@ -409,8 +412,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 unit_price=unit_price, line_total=line_total
             ))
 
-            p.stock -= qty
-            p.save(update_fields=["stock"])
+            # Locked above via select_for_update; reserve guards against oversell.
+            try:
+                reserve(p, qty)
+            except InsufficientStock:
+                raise serializers.ValidationError(
+                    {"items": f"Insufficient stock for {p.name}."}
+                )
 
         OrderItem.objects.bulk_create(rows)
 

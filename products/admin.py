@@ -11,7 +11,7 @@ from django.core.exceptions import FieldDoesNotExist
 import csv, io, re
 from decimal import Decimal, InvalidOperation
 
-from .models import Category, Product
+from .models import Category, Product, StockMovement
 
 
 # -------------------- helpers --------------------
@@ -114,6 +114,25 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 
+@admin.register(StockMovement)
+class StockMovementAdmin(admin.ModelAdmin):
+    """Read-only audit ledger of stock changes."""
+    list_display = ('created_at', 'product', 'delta', 'balance_after', 'reason', 'reference', 'created_by')
+    list_filter = ('reason', 'created_at')
+    search_fields = ('product__name', 'reference')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     # ---- your existing config (kept) ----
@@ -164,23 +183,24 @@ class ProductAdmin(admin.ModelAdmin):
 
             from .utils import process_stock_excel
             try:
-                results = process_stock_excel(f)
-                
-                # Check for errors
-                if results.get('errors'):
-                    for err in results['errors'][:10]: # show first 10
-                         messages.warning(request, err)
-                    if len(results['errors']) > 10:
-                        messages.warning(request, f"... and {len(results['errors']) - 10} more errors.")
+                results = process_stock_excel(f, user=request.user)
 
-                messages.success(request, 
-                    f"Upload Complete. "
-                    f"Categories: {results.get('categories_created')} created, {results.get('categories_updated')} updated. "
-                    f"Products: {results.get('products_created')} created, {results.get('products_updated')} updated."
+                # Surface skipped rows / unparseable cells instead of hiding them.
+                if results.get('errors'):
+                    for err in results['errors'][:10]:  # show first 10
+                        messages.warning(request, err)
+                    if len(results['errors']) > 10:
+                        messages.warning(request, f"... and {len(results['errors']) - 10} more issues.")
+
+                messages.success(request,
+                    f"Upload complete. "
+                    f"Categories: {results.get('categories_created')} created, {results.get('categories_matched')} matched. "
+                    f"Products: {results.get('products_created')} created, {results.get('products_updated')} updated, "
+                    f"{results.get('rows_skipped')} skipped."
                 )
 
-            except Exception as e:
-                messages.error(request, f"Parse error: {e}")
+            except Exception:
+                messages.error(request, "Could not process the file. Please check the format and try again.")
                 return redirect("admin:products_product_upload_excel")
 
             return redirect("admin:products_product_changelist")

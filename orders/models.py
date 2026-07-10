@@ -120,11 +120,26 @@ class Order(models.Model):
     state = models.CharField(max_length=100)
     pincode = models.CharField(max_length=12)
 
+    # Client-supplied dedupe token. Lets a retried checkout (slow serverless,
+    # dropped connection, app killed mid-request) resolve to the SAME order
+    # instead of creating duplicates. NULL for older clients that don't send one.
+    idempotency_key = models.CharField(
+        max_length=64, null=True, blank=True, db_index=True
+    )
+
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            # Scoped per user; NULLs are treated as distinct so keyless orders
+            # (old clients) are never blocked.
+            models.UniqueConstraint(
+                fields=["user", "idempotency_key"],
+                name="uniq_user_idempotency_key",
+            ),
+        ]
 
     def __str__(self):
         return f"Order #{self.id} - {self.user} - {self.status} - {self.source}"

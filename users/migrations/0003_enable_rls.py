@@ -39,6 +39,21 @@ DISABLE_SQL = "\n".join(
 )
 
 
+# Row Level Security is a PostgreSQL-only feature. Guard by vendor so this
+# migration is a no-op on SQLite (used for local testing) while running the
+# exact same SQL on Postgres/Supabase in production.
+def _enable_rls(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(ENABLE_SQL)
+
+
+def _disable_rls(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(DISABLE_SQL)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -50,5 +65,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(sql=ENABLE_SQL, reverse_sql=DISABLE_SQL),
+        migrations.RunPython(_enable_rls, _disable_rls),
     ]
